@@ -1,0 +1,51 @@
+Package Report
+
+-----------------------------------------------------------------------------
+Document:
+Name: 04_Medilink__BRAND_Identity_Guidlines_V1.ai
+Color Mode: RGB color
+Color Profile: sRGB IEC61966-2.1
+Ruler Units: pixels
+Artboard Dimensions: 1920 px x 1080 px
+Show Images in Outline Mode: OFF
+Highlight Substituted Fonts: OFF
+Highlight Substituted Glyphs: OFF
+Preserve Text Editability
+Simulate Colored Paper: OFF
+
+-----------------------------------------------------------------------------
+Spot Color Objects:
+
+-----------------------------------------------------------------------------
+Missing Fonts:NONE
+
+-----------------------------------------------------------------------------
+Protected Fonts that were not packaged:NONE
+
+-----------------------------------------------------------------------------
+Fonts:
+Agatho (OTF)
+Agatho Bold (OTF)
+Agatho Medium (OTF)
+29LT Zarid Sans AL Variable Medium (OTF)
+29LT Zarid Sans AL Variable Bold (OTF)
+29LT Zarid Sans AL Variable Regular (OTF)
+Abigaila Signature (OTF)
+Goli (OTF)
+Manrope Medium (OTF)
+Manrope Bold (OTF)
+Manrope ExtraBold (OTF)
+Manrope Semibold (OTF)
+Manrope Regular (OTF)
+
+-----------------------------------------------------------------------------
+Embedded Fonts:
+NONE
+
+-----------------------------------------------------------------------------
+Missing Links:
+NONE
+
+-----------------------------------------------------------------------------
+Linked Images:
+NONE

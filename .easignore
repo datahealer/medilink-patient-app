@@ -1,0 +1,10 @@
+# Uploaded-to-EAS exclusions. brandkit/ (208 MB) and screenshots/ (19 MB) are
+# input material only — nothing in the app imports them, so keep them out of
+# every build upload. dist/ is the web export.
+brandkit/
+screenshots/
+dist/
+node_modules/
+.expo/
+*.log
+.DS_Store
