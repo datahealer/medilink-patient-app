@@ -2,7 +2,7 @@ import React from "react";
 import { KeyboardAvoidingView, Modal, Platform, Pressable, ScrollView, TextInput, View, type StyleProp, type ViewStyle } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { useTheme } from "@/theme";
-import { fontFamilyFor } from "@/theme/typography";
+import { figuresFor, fontFamilyFor, inputFontSize } from "@/theme/typography";
 import { AppText } from "./AppText";
 import { Icon } from "./Icon";
 
@@ -166,7 +166,8 @@ export function SearchField({
           style={{
             flex: 1,
             fontFamily: fontFamilyFor("body", "medium", isRTL),
-            fontSize: 14.5,
+            ...figuresFor(isRTL),
+            fontSize: inputFontSize(14.5, isRTL),
             color: colors.text,
             textAlign: isRTL ? "right" : "left",
             paddingVertical: 0,

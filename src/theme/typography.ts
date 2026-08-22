@@ -1,6 +1,11 @@
+import type { TextStyle } from "react-native";
+
 /**
  * Font roles — identical strategy to production:
- *  - arabic  → 29LT Zarid Sans (static weights; VF default master is Thin)
+ *  - arabic  → 29LT Zarid Sans (static instances cut from the VF; each file's
+ *    internal family/PostScript name is patched to match its key below —
+ *    as exported they all shared one name, so iOS/CoreText registered only
+ *    the first and every weight silently fell back to Regular)
  *  - heading → Agatho serif (EN display / brand moments)
  *  - body    → Manrope (EN UI)
  * Arabic gets a +8% size bump (smaller x-height than Manrope).
@@ -23,7 +28,45 @@ export const BRAND_FONT_FILES = {
 export type FontRole = "heading" | "body" | "arabic";
 export type FontWeight = "regular" | "medium" | "semibold" | "bold" | "extrabold";
 
+/** Zarid has a smaller x-height than Manrope, so Arabic is scaled up… */
 export const ARABIC_FONT_SCALE = 1.08;
+/** …plus a flat +1px on top of the scale (client request, 2026-08-11). */
+export const ARABIC_FONT_BUMP = 1;
+
+/**
+ * Arabic-aware size for a type role. The leading ratio of the role is kept, so
+ * a bigger face also gets a proportionally taller line box — Arabic needs the
+ * room for its descenders and diacritics.
+ */
+export function scaleType(fontSize: number, lineHeight: number, isArabic: boolean) {
+  if (!isArabic) return { fontSize, lineHeight };
+  const size = fontSize * ARABIC_FONT_SCALE + ARABIC_FONT_BUMP;
+  return { fontSize: size, lineHeight: Math.round(size * (lineHeight / fontSize) * 10) / 10 };
+}
+
+/**
+ * Same bump for raw <TextInput>s, which style themselves instead of going
+ * through <AppText> — without this, typed Arabic stays smaller than the
+ * labels above it.
+ */
+export function inputFontSize(base: number, isArabic: boolean): number {
+  return isArabic ? base * ARABIC_FONT_SCALE + ARABIC_FONT_BUMP : base;
+}
+
+/**
+ * Zarid Sans defaults to old-style (text) figures — 0/1/2 sit at x-height,
+ * 6/8 ascend, 3/4/5/7/9 descend — so a run of digits looks vertically
+ * misaligned. Every bundled Zarid weight carries the OpenType 'lnum' feature,
+ * so force lining figures whenever the Arabic face is in use. Pair this with
+ * every fontFamilyFor(…, isArabic) that can render digits.
+ *
+ * Returned as a spreadable fragment: native RN crashes on a present-but-empty
+ * fontVariant key (processFontVariant calls .split on it), so the key must be
+ * absent entirely in English mode.
+ */
+export function figuresFor(isArabic: boolean): Pick<TextStyle, "fontVariant"> | null {
+  return isArabic ? { fontVariant: ["lining-nums"] } : null;
+}
 
 export function fontFamilyFor(role: FontRole, weight: FontWeight, isArabic: boolean): string {
   if (isArabic || role === "arabic") {

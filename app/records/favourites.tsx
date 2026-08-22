@@ -110,7 +110,7 @@ export default function Favourites() {
           icon="heart"
           title={t("records.favouritesEmpty")}
           body={t("records.favouritesEmptyBody")}
-          action={<Button label={t("explore.browseAll")} onPress={() => router.push("/(tabs)/explore")} />}
+          action={<Button label={t("explore.browseAll")} onPress={() => router.push("/search")} />}
         />
       ) : null}
 

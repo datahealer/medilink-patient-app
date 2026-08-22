@@ -1,8 +1,27 @@
-import React from "react";
-import { KeyboardAvoidingView, Platform, RefreshControl, ScrollView, View, type ViewStyle } from "react-native";
+import React, { useEffect, useState } from "react";
+import { Keyboard, KeyboardAvoidingView, Platform, RefreshControl, ScrollView, View, type ViewStyle } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { StatusBar } from "expo-status-bar";
 import { useTheme } from "@/theme";
+
+/**
+ * Whether the on-screen keyboard is up (always false on web/desktop). "will"
+ * events on iOS so the footer is gone BEFORE the keyboard animates in — the
+ * auto-scroll that reveals the focused input then measures the true space.
+ */
+function useKeyboardOpen(): boolean {
+  const [open, setOpen] = useState(false);
+  useEffect(() => {
+    if (Platform.OS === "web") return;
+    const show = Keyboard.addListener(Platform.OS === "ios" ? "keyboardWillShow" : "keyboardDidShow", () => setOpen(true));
+    const hide = Keyboard.addListener(Platform.OS === "ios" ? "keyboardWillHide" : "keyboardDidHide", () => setOpen(false));
+    return () => {
+      show.remove();
+      hide.remove();
+    };
+  }, []);
+  return open;
+}
 
 interface ScreenProps {
   children: React.ReactNode;
@@ -34,6 +53,7 @@ export function Screen({
   const { colors, spacing, scheme } = useTheme();
   const insets = useSafeAreaInsets();
   const bg = background ?? colors.background;
+  const keyboardOpen = useKeyboardOpen();
 
   const content = scroll ? (
     <ScrollView
@@ -45,6 +65,7 @@ export function Screen({
       ]}
       showsVerticalScrollIndicator={false}
       keyboardShouldPersistTaps="handled"
+      keyboardDismissMode={Platform.OS === "ios" ? "interactive" : "on-drag"}
       refreshControl={
         onRefresh ? (
           <RefreshControl refreshing={!!refreshing} onRefresh={onRefresh} tintColor={colors.primaryMuted} />
@@ -63,7 +84,12 @@ export function Screen({
       {header}
       <KeyboardAvoidingView style={{ flex: 1 }} behavior={Platform.OS === "ios" ? "padding" : undefined}>
         {content}
-        {footer ? (
+        {/* The sticky CTA steps aside while typing: riding above the keyboard
+            it covered the very input being edited (booking's reason box), and
+            iOS scrolls the focused field to the keyboard's edge, unaware a
+            button occupies that strip. Dismiss (tap outside / drag) brings it
+            back. Web never has an overlay keyboard, so it never hides there. */}
+        {footer && !keyboardOpen ? (
           <View
             style={{
               paddingHorizontal: spacing.md,

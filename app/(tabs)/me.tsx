@@ -6,7 +6,7 @@ import { pickLang, useI18n } from "@/i18n";
 import { repositories } from "@/data";
 import { useQueryish } from "@/data/hooks";
 import type { AiSuggestion, Doctor } from "@/data/types";
-import { fontFamilyFor } from "@/theme/typography";
+import { figuresFor, fontFamilyFor, inputFontSize } from "@/theme/typography";
 import { AppText, Avatar, Badge, Icon, Rating, Screen } from "@/components/ui";
 import { formatOMR } from "@/utils/format";
 
@@ -211,7 +211,8 @@ export default function MeAssistant() {
             backgroundColor: colors.inputBackground,
             paddingHorizontal: 18,
             fontFamily: fontFamilyFor("body", "medium", isRTL),
-            fontSize: 14.5,
+            ...figuresFor(isRTL),
+            fontSize: inputFontSize(14.5, isRTL),
             color: colors.text,
             textAlign: isRTL ? "right" : "left",
           }}

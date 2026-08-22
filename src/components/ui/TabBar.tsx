@@ -1,5 +1,5 @@
 import React from "react";
-import { Image, Pressable, View } from "react-native";
+import { Pressable, View } from "react-native";
 import type { BottomTabBarProps } from "@react-navigation/bottom-tabs";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { useTheme } from "@/theme";
@@ -7,17 +7,18 @@ import { useI18n } from "@/i18n";
 import { AppText } from "./AppText";
 import { Icon, type IconName } from "./Icon";
 
+// The "Me" assistant tab is hidden for now (client feedback 2026-08-20) —
+// its route still exists at /(tabs)/me; restore the entry here to bring it back.
 const TABS: { name: string; icon: IconName; labelKey: string }[] = [
   { name: "index", icon: "home", labelKey: "tabs.home" },
   { name: "explore", icon: "compass", labelKey: "tabs.explore" },
-  { name: "me", icon: "sparkle", labelKey: "tabs.me" },
   { name: "appointments", icon: "calendar", labelKey: "tabs.appointments" },
-  { name: "records", icon: "file-heart", labelKey: "tabs.records" },
+  // A person, not a case file: the tab is the profile hub (identity, family, records, account).
+  { name: "records", icon: "user", labelKey: "tabs.records" },
 ];
 
 /**
- * Custom 5-tab bar — labels always visible, 44pt targets, order mirrors in
- * RTL, centre "Me" is the raised brand submark tile.
+ * Custom tab bar — labels always visible, 44pt targets, order mirrors in RTL.
  */
 export function TabBar({ state, navigation }: BottomTabBarProps) {
   const { colors, isRTL, shadow } = useTheme();
@@ -41,7 +42,6 @@ export function TabBar({ state, navigation }: BottomTabBarProps) {
       {items.map((tab) => {
         const routeIndex = state.routes.findIndex((r) => r.name === tab.name);
         const focused = state.index === routeIndex;
-        const isMe = tab.name === "me";
         const color = focused ? colors.primary : colors.textFaint;
         return (
           <Pressable
@@ -55,30 +55,8 @@ export function TabBar({ state, navigation }: BottomTabBarProps) {
             }}
             style={{ flex: 1, alignItems: "center", gap: 3, paddingVertical: 2 }}
           >
-            {isMe ? (
-              <View
-                style={{
-                  width: 46,
-                  height: 46,
-                  borderRadius: 16,
-                  marginTop: -22,
-                  backgroundColor: "#2E1A47",
-                  alignItems: "center",
-                  justifyContent: "center",
-                  borderWidth: 3.5,
-                  borderColor: colors.surface,
-                  ...(shadow(2) as object),
-                }}
-              >
-                <Image
-                  source={require("../../../assets/brand/me-mark.png")}
-                  style={{ width: 24, height: 24, resizeMode: "contain" }}
-                />
-              </View>
-            ) : (
-              <Icon name={tab.icon} size={22} color={color} strokeWidth={focused ? 2.1 : 1.7} />
-            )}
-            <AppText role="tiny" weight={focused ? "bold" : "medium"} color={isMe && !focused ? colors.textFaint : color}>
+            <Icon name={tab.icon} size={22} color={color} strokeWidth={focused ? 2.1 : 1.7} />
+            <AppText role="tiny" weight={focused ? "bold" : "medium"} color={color}>
               {t(tab.labelKey as never)}
             </AppText>
           </Pressable>

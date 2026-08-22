@@ -1,4 +1,4 @@
-import React from "react";
+import React, { useState } from "react";
 import { Pressable, View } from "react-native";
 import { router, useLocalSearchParams } from "expo-router";
 import { useTheme } from "@/theme";
@@ -43,6 +43,11 @@ export default function DoctorDetail() {
   const { t } = i18n;
   const doctor = useQueryish(() => repositories.doctor.get(id!), [id]);
   const reviews = useQueryish(() => repositories.doctor.reviews(id!), [id]);
+  // Everything beyond consultation stays folded — consultation is the headline.
+  const [servicesOpen, setServicesOpen] = useState(false);
+  // Guests book too (client feedback 2026-08-20) — identity is confirmed just
+  // before payment, inside the wizard, not at this button.
+  const book = (href: string) => router.push(href as never);
 
   const d = doctor.data;
 
@@ -78,7 +83,7 @@ export default function DoctorDetail() {
           }
         />
       }
-      footer={<CtaButton label={t("doctor.book")} icon="calendar-plus" onPress={() => router.push(`/booking/${d.id}`)} />}
+      footer={<CtaButton label={t("doctor.book")} icon="calendar-plus" onPress={() => book(`/booking/${d.id}`)} />}
     >
       {/* Identity */}
       <View style={{ flexDirection: row, gap: spacing.md, alignItems: "center" }}>
@@ -133,7 +138,8 @@ export default function DoctorDetail() {
         ))}
       </View>
 
-      {/* Fees */}
+      {/* Fees — consultation is the headline; other procedures this doctor
+          performs (wound dressing, ear cleaning…) stay behind "+n more". */}
       <Card style={{ marginTop: spacing.md }} padded={false}>
         <View style={{ padding: spacing.md, flexDirection: row, alignItems: "center", justifyContent: "space-between" }}>
           <View style={{ flexDirection: row, gap: 8, alignItems: "center" }}>
@@ -142,7 +148,45 @@ export default function DoctorDetail() {
           </View>
           <AppText role="price">{formatOMR(d.fee_omr, i18n)}</AppText>
         </View>
-
+        {d.services?.length ? (
+          <>
+            {servicesOpen
+              ? d.services.map((s) => (
+                  <View key={s.id}>
+                    <Divider />
+                    <View style={{ paddingHorizontal: spacing.md, paddingVertical: 11, flexDirection: row, alignItems: "center", justifyContent: "space-between", gap: 10 }}>
+                      <AppText role="label" color={colors.textMuted} style={{ flexShrink: 1 }}>
+                        {pickLang(isRTL, s.name, s.name_ar)}
+                      </AppText>
+                      <AppText role="label" weight="bold">
+                        {formatOMR(s.price_omr, i18n)}
+                      </AppText>
+                    </View>
+                  </View>
+                ))
+              : null}
+            <Divider />
+            <Pressable
+              onPress={() => setServicesOpen((v) => !v)}
+              accessibilityRole="button"
+              accessibilityState={{ expanded: servicesOpen }}
+              style={({ pressed }) => ({
+                paddingHorizontal: spacing.md,
+                paddingVertical: 11,
+                flexDirection: row,
+                alignItems: "center",
+                justifyContent: "center",
+                gap: 6,
+                opacity: pressed ? 0.7 : 1,
+              })}
+            >
+              <AppText role="label" weight="bold" color={colors.primaryMuted}>
+                {servicesOpen ? t("doctor.showLess") : t("doctor.moreServices", { n: d.services.length })}
+              </AppText>
+              <Icon name={servicesOpen ? "chevron-up" : "chevron-down"} size={15} color={colors.primaryMuted} />
+            </Pressable>
+          </>
+        ) : null}
       </Card>
 
       {/* About */}
@@ -169,7 +213,7 @@ export default function DoctorDetail() {
           </AppText>
           <View style={{ flexDirection: row, gap: 8, flexWrap: "wrap" }}>
             {d.slots_today.map((s) => (
-              <Chip key={s} label={`${t("common.today")} · ${formatTime(s, i18n)}`} onPress={() => router.push(`/booking/${d.id}?slot=${s}`)} />
+              <Chip key={s} label={`${t("common.today")} · ${formatTime(s, i18n)}`} onPress={() => book(`/booking/${d.id}?slot=${s}`)} />
             ))}
           </View>
         </>

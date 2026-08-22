@@ -1,13 +1,29 @@
 import React, { useState } from "react";
 import { Pressable, TextInput, View } from "react-native";
+import { router } from "expo-router";
 import { useTheme } from "@/theme";
 import { pickLang, useI18n } from "@/i18n";
 import { repositories } from "@/data";
 import { useQueryish } from "@/data/hooks";
+import { useAppStore } from "@/stores/appStore";
 import type { FamilyMember, FamilyRelation, Gender } from "@/data/types";
 import { ageFrom } from "@/utils/format";
-import { fontFamilyFor } from "@/theme/typography";
-import { AppHeader, AppText, Avatar, Badge, Button, Card, Chip, CtaButton, Icon, Screen, SegmentedTabs, Sheet } from "@/components/ui";
+import { figuresFor, fontFamilyFor, inputFontSize } from "@/theme/typography";
+import {
+  AppHeader,
+  AppText,
+  Avatar,
+  Badge,
+  Button,
+  Card,
+  Chip,
+  CtaButton,
+  DateField,
+  Icon,
+  Screen,
+  SegmentedTabs,
+  Sheet,
+} from "@/components/ui";
 
 const RELATIONS: FamilyRelation[] = ["spouse", "child", "parent", "sibling", "other"];
 
@@ -23,6 +39,8 @@ export default function Family() {
   const { colors, spacing, radii, row, isRTL } = useTheme();
   const { t } = useI18n();
   const familyList = useQueryish(() => repositories.family.list(), []);
+  const activePatientId = useAppStore((s) => s.activePatientId);
+  const setActivePatient = useAppStore((s) => s.setActivePatient);
 
   const [addOpen, setAddOpen] = useState(false);
   const [removing, setRemoving] = useState<FamilyMember | null>(null);
@@ -33,17 +51,16 @@ export default function Family() {
   const [nameEn, setNameEn] = useState("");
   const [relation, setRelation] = useState<FamilyRelation>("child");
   const [gender, setGender] = useState<Gender>("female");
-  const [dob, setDob] = useState("");
+  const [dob, setDob] = useState<string | null>(null);
 
-  const validDob = /^\d{4}-\d{2}-\d{2}$/.test(dob) && !Number.isNaN(Date.parse(dob)) && Date.parse(dob) < Date.now();
-  const canAdd = nameAr.trim().length > 1 && nameEn.trim().length > 1 && validDob;
+  const canAdd = nameAr.trim().length > 1 && nameEn.trim().length > 1 && !!dob;
 
   const resetForm = () => {
     setNameAr("");
     setNameEn("");
     setRelation("child");
     setGender("female");
-    setDob("");
+    setDob(null);
   };
 
   const add = async () => {
@@ -53,7 +70,7 @@ export default function Family() {
       full_name_ar: nameAr.trim(),
       relation,
       gender,
-      date_of_birth: dob,
+      date_of_birth: dob!,
     });
     await familyList.refetch();
     setBusy(false);
@@ -64,6 +81,8 @@ export default function Family() {
   const remove = async () => {
     if (!removing) return;
     setBusy(true);
+    // Never leave the app viewing a profile that no longer exists.
+    if (activePatientId === removing.id) setActivePatient("self");
     await repositories.family.remove(removing.id);
     await familyList.refetch();
     setBusy(false);
@@ -78,7 +97,8 @@ export default function Family() {
     backgroundColor: colors.inputBackground,
     paddingHorizontal: 14,
     fontFamily: fontFamilyFor("body", "medium", isRTL),
-    fontSize: 14.5,
+    ...figuresFor(isRTL),
+    fontSize: inputFontSize(14.5, isRTL),
     color: colors.text,
     textAlign: (isRTL ? "right" : "left") as "right" | "left",
   };
@@ -91,14 +111,19 @@ export default function Family() {
             <View style={{ flexDirection: row, gap: 12, alignItems: "center" }}>
               <Avatar name={pickLang(isRTL, m.full_name, m.full_name_ar)} hue={200 + i * 40} size={48} />
               <View style={{ flex: 1 }}>
-                <AppText role="cardTitle" weight="bold">
+                <AppText role="cardTitle" weight="bold" numberOfLines={1}>
                   {pickLang(isRTL, m.full_name, m.full_name_ar)}
                 </AppText>
                 <AppText role="caption" color={colors.textMuted}>
                   {t(relationKey[m.relation] as never)} · {t("records.memberAge", { n: ageFrom(m.date_of_birth) })}
                 </AppText>
               </View>
-              <Badge label={m.gender === "female" ? t("explore.female") : t("explore.male")} tone="blue" />
+              {/* Distinct hues per gender at equal weight — one shared colour
+                  carried no meaning, and a dark chip would over-emphasise it */}
+              <Badge
+                label={m.gender === "female" ? t("explore.female") : t("explore.male")}
+                tone={m.gender === "female" ? "lavender" : "blue"}
+              />
               <Pressable
                 onPress={() => setRemoving(m)}
                 accessibilityRole="button"
@@ -109,9 +134,27 @@ export default function Family() {
                 <Icon name="trash" size={16} color={colors.error} />
               </Pressable>
             </View>
+            {/* Reading a member's file is a switch, not a separate screen */}
+            <Pressable
+              onPress={() => {
+                setActivePatient(m.id);
+                router.push("/(tabs)/records");
+              }}
+              accessibilityRole="button"
+              style={{ flexDirection: row, gap: 8, alignItems: "center", marginTop: 12, paddingTop: 10, borderTopWidth: 1, borderTopColor: colors.border }}
+            >
+              <Icon name="file-heart" size={15} color={colors.primaryMuted} />
+              <AppText role="label" weight="bold" color={colors.primaryMuted} style={{ flex: 1 }}>
+                {t("profiles.openFile")}
+              </AppText>
+              <Icon name={isRTL ? "chevron-left" : "chevron-right"} size={15} color={colors.textFaint} />
+            </Pressable>
           </Card>
         ))}
         <Button label={t("records.addMember")} variant="tonal" icon="plus" onPress={() => setAddOpen(true)} />
+        <AppText role="tiny" color={colors.textFaint} align="center">
+          {t("profiles.onlyHolder")}
+        </AppText>
       </View>
 
       {/* Add member */}
@@ -139,34 +182,21 @@ export default function Family() {
               ))}
             </View>
           </View>
-          <View style={{ flexDirection: row, gap: 10 }}>
-            <View style={{ flex: 1, gap: 7 }}>
-              <AppText role="label" color={colors.textMuted}>
-                {t("records.gender")}
-              </AppText>
-              <SegmentedTabs
-                options={[
-                  { id: "female", label: t("explore.female") },
-                  { id: "male", label: t("explore.male") },
-                ]}
-                value={gender}
-                onChange={(id) => setGender(id as Gender)}
-              />
-            </View>
-            <View style={{ flex: 1, gap: 7 }}>
-              <AppText role="label" color={colors.textMuted}>
-                {t("records.dob")}
-              </AppText>
-              <TextInput
-                value={dob}
-                onChangeText={setDob}
-                placeholder="2015-08-20"
-                keyboardType="numbers-and-punctuation"
-                style={[inputStyle, { writingDirection: "ltr" }]}
-                placeholderTextColor={colors.textFaint}
-              />
-            </View>
+          <View style={{ gap: 7 }}>
+            <AppText role="label" color={colors.textMuted}>
+              {t("records.gender")}
+            </AppText>
+            <SegmentedTabs
+              options={[
+                { id: "female", label: t("explore.female") },
+                { id: "male", label: t("explore.male") },
+              ]}
+              value={gender}
+              onChange={(id) => setGender(id as Gender)}
+            />
           </View>
+          {/* Calendar, not a typed date */}
+          <DateField label={t("records.dob")} value={dob} onChange={setDob} />
           <CtaButton label={t("common.add")} disabled={!canAdd} loading={busy} onPress={add} />
         </View>
       </Sheet>

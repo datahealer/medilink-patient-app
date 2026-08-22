@@ -1,4 +1,4 @@
-import React, { useCallback } from "react";
+import React, { useCallback, useState } from "react";
 import { Pressable, View } from "react-native";
 import { router, useFocusEffect } from "expo-router";
 import { LinearGradient } from "expo-linear-gradient";
@@ -8,6 +8,7 @@ import { useAppStore } from "@/stores/appStore";
 import { repositories } from "@/data";
 import { useQueryish } from "@/data/hooks";
 import { daysUntil, formatShortDate, formatTime } from "@/utils/format";
+import { ProfileSwitcher, ViewingAsBanner, personName, useActivePerson } from "@/components/ProfileSwitcher";
 import {
   AppText,
   Avatar,
@@ -26,17 +27,27 @@ import {
   SectionHeader,
   Skeleton,
   SpecialtyTile,
+  useSpecialtyGrid,
 } from "@/components/ui";
+
+/** Services shown on the home grid — 4×2 on a standard phone, 5+3 on a 16 Pro Max. */
+const SERVICE_TILES = 8;
 
 export default function Home() {
   const { colors, spacing, radii, row, isRTL } = useTheme();
+  const grid = useSpecialtyGrid(SERVICE_TILES);
   const i18n = useI18n();
   const { t } = i18n;
   const guest = useAppStore((s) => s.guest);
-  const authed = useAppStore((s) => s.authed);
+  const [switcherOpen, setSwitcherOpen] = useState(false);
 
-  const profile = useQueryish(() => repositories.patient.getProfile(), []);
-  const upcoming = useQueryish(() => repositories.appointment.list("upcoming"), []);
+  // Home reflects whichever profile is active — the account holder's by default.
+  const { activePatientId, person } = useActivePerson();
+  // A guest has no file to read from: never fetch (or show) somebody's visits.
+  const upcoming = useQueryish(
+    () => (guest ? Promise.resolve([]) : repositories.appointment.list("upcoming", activePatientId)),
+    [activePatientId, guest],
+  );
   const specialties = useQueryish(() => repositories.discovery.listSpecialties(), []);
   const packages = useQueryish(() => repositories.discovery.searchPackages(""), []);
   const clinics = useQueryish(() => repositories.discovery.featuredClinics(), []);
@@ -45,7 +56,7 @@ export default function Home() {
 
   const hour = new Date().getHours();
   const greetingKey = hour < 12 ? "home.greetingMorning" : hour < 17 ? "home.greetingAfternoon" : "home.greetingEvening";
-  const firstName = profile.data ? pickLang(isRTL, profile.data.full_name, profile.data.full_name_ar).split(" ")[0] : "";
+  const firstName = person ? personName(person, isRTL).split(" ")[0] : "";
 
   const next = upcoming.data?.[0];
   const nextDoctor = useQueryish(
@@ -57,23 +68,27 @@ export default function Home() {
     unread.refetch();
   };
 
-  // Reflect cross-screen mutations (payments, cancellations) when returning.
+  // Reflect cross-screen mutations (payments, cancellations, profile switches).
   useFocusEffect(
     useCallback(() => {
       upcoming.refetch();
       unread.refetch();
       // eslint-disable-next-line react-hooks/exhaustive-deps
-    }, []),
+    }, [activePatientId]),
   );
 
   return (
     <Screen refreshing={upcoming.isLoading} onRefresh={refetchAll}>
       {/* Header: identity + notifications. The logo lives in onboarding/auth — the home is about the PATIENT. */}
       <View style={{ flexDirection: row, alignItems: "center", gap: 12, marginTop: spacing.sm }}>
-        <Pressable onPress={() => router.push("/profile")} accessibilityRole="button">
+        <Pressable
+          onPress={() => (guest ? router.push("/profile") : setSwitcherOpen(true))}
+          accessibilityRole="button"
+          accessibilityLabel={guest ? t("profile.title") : t("profiles.switch")}
+        >
           <Avatar
-            name={guest ? (isRTL ? "ز" : "G") : profile.data ? pickLang(isRTL, profile.data.full_name, profile.data.full_name_ar) : ""}
-            hue={profile.data?.avatarHue ?? 275}
+            name={guest ? (isRTL ? "ز" : "G") : person ? personName(person, isRTL) : ""}
+            hue={person?.avatarHue ?? 275}
             size={44}
           />
         </Pressable>
@@ -81,9 +96,12 @@ export default function Home() {
           <AppText role="caption" color={colors.textMuted}>
             {t(greetingKey as never)}
           </AppText>
-          <AppText role="h2" weight="bold">
-            {guest ? t("home.guestHello") : firstName || " "}
-          </AppText>
+          <View style={{ flexDirection: row, alignItems: "center", gap: 5 }}>
+            <AppText role="h2" weight="bold" numberOfLines={1} style={{ flexShrink: 1 }}>
+              {guest ? t("home.guestHello") : firstName || " "}
+            </AppText>
+            {!guest ? <Icon name="chevron-down" size={15} color={colors.textFaint} /> : null}
+          </View>
         </View>
         <Pressable
           onPress={() => router.push("/notifications")}
@@ -119,13 +137,27 @@ export default function Home() {
         </Pressable>
       </View>
 
+      {/* Viewing a family member's file — one tap back to your own */}
+      <ViewingAsBanner person={person} />
+
       {/* THE single search entry point (a launcher, not a second input) */}
       <View style={{ marginTop: spacing.md }}>
-        <SearchField placeholder={t("home.searchPrompt")} onPressLauncher={() => router.push("/(tabs)/explore")} />
+        <SearchField placeholder={t("home.searchPrompt")} onPressLauncher={() => router.push("/search")} />
       </View>
 
-      {/* State first: the next visit */}
-      {upcoming.isLoading ? (
+      {/* State first: the next visit — or, for a guest, the invitation to book.
+          Booking is open to guests; sign-in stays a quiet secondary door. */}
+      {guest ? (
+        <Card style={{ marginTop: spacing.md }}>
+          <AppText role="cardTitle" weight="bold">
+            {t("home.guestBody")}
+          </AppText>
+          <View style={{ flexDirection: row, gap: 8, marginTop: 12 }}>
+            <Button label={t("home.bookFirst")} variant="primary" style={{ flex: 1 }} onPress={() => router.push("/doctors")} />
+            <Button label={t("common.signIn")} variant="outline" onPress={() => router.push("/auth/sign-in")} />
+          </View>
+        </Card>
+      ) : upcoming.isLoading ? (
         <Skeleton height={150} radius={radii.xl} style={{ marginTop: spacing.md }} />
       ) : next && nextDoctor.data ? (
         <LinearGradient
@@ -178,13 +210,6 @@ export default function Home() {
             <Button label={t("home.details")} variant="tonal" small onPress={() => router.push(`/appointments/${next.id}`)} />
           </View>
         </LinearGradient>
-      ) : guest ? (
-        <Card style={{ marginTop: spacing.md }}>
-          <AppText role="cardTitle" weight="bold">
-            {t("home.guestBody")}
-          </AppText>
-          <Button label={t("common.signIn")} variant="primary" style={{ marginTop: 12 }} onPress={() => router.push("/auth/sign-in")} />
-        </Card>
       ) : (
         <Card style={{ marginTop: spacing.md }}>
           <View style={{ flexDirection: row, gap: 12, alignItems: "center" }}>
@@ -197,19 +222,20 @@ export default function Home() {
               </AppText>
             </View>
           </View>
-          <CtaButton label={t("home.bookFirst")} onPress={() => router.push("/(tabs)/explore")} style={{ marginTop: 14 }} />
+          <CtaButton label={t("home.bookFirst")} onPress={() => router.push("/doctors")} style={{ marginTop: 14 }} />
         </Card>
       )}
 
       {/* Services */}
       <SectionHeader title={t("home.services")} actionLabel={t("common.seeAll")} onAction={() => router.push("/specialties")} />
-      <View style={{ flexDirection: row, flexWrap: "wrap", justifyContent: "space-between", rowGap: spacing.md }}>
-        {(specialties.data ?? []).slice(0, 8).map((s, i) => (
+      <View style={{ flexDirection: row, flexWrap: "wrap", columnGap: grid.gap, rowGap: spacing.md }}>
+        {(specialties.data ?? []).slice(0, SERVICE_TILES).map((s, i) => (
           <SpecialtyTile
             key={s.id}
             specialty={s}
             index={i}
-            onPress={() => router.push({ pathname: "/doctors", params: { specialty: s.id } })}
+            width={grid.tileWidth}
+            onPress={() => router.push(`/services/${s.id}`)}
           />
         ))}
       </View>
@@ -230,13 +256,19 @@ export default function Home() {
         ))}
       </HScroll>
 
-      {/* Top doctors */}
+      {/* Doctors — a general section now; "highly rated" is a filter, not the whole list */}
       <SectionHeader title={t("home.topDoctors")} actionLabel={t("common.seeAll")} onAction={() => router.push("/doctors")} />
       <HScroll bleed={spacing.md}>
         {(topDoctors.data ?? []).slice(0, 4).map((doctor) => (
           <DoctorCard key={doctor.id} doctor={doctor} compact />
         ))}
       </HScroll>
+
+      <ProfileSwitcher
+        visible={switcherOpen}
+        onClose={() => setSwitcherOpen(false)}
+        onManageFamily={() => router.push("/records/family")}
+      />
     </Screen>
   );
 }

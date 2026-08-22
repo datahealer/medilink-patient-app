@@ -46,6 +46,12 @@
         "projectId": "d72a4ae8-028b-4b6a-a349-c88da111c89a"
       }
     },
-    "owner": "jaiinzint"
+    "owner": "jaiinzint",
+    "runtimeVersion": {
+      "policy": "appVersion"
+    },
+    "updates": {
+      "url": "https://u.expo.dev/d72a4ae8-028b-4b6a-a349-c88da111c89a"
+    }
   }
 }

@@ -27,7 +27,6 @@ export default function PackageDetail() {
     () => (pkg.data ? repositories.doctor.search({ clinicId: pkg.data.clinic_id }) : Promise.resolve([])),
     [pkg.data?.clinic_id],
   );
-
   const p = pkg.data;
   if (!p) {
     return (
@@ -37,9 +36,13 @@ export default function PackageDetail() {
     );
   }
 
+  // The visit goes to a doctor who performs this package, not to whoever the
+  // clinic happens to list first. Guests book too — identity is confirmed just
+  // before payment, inside the wizard.
   const book = () => {
-    const doctor = doctors.data?.[0];
-    if (doctor) router.push(`/booking/${doctor.id}?package=${p.id}`);
+    const doctor = doctors.data?.find((d) => d.specialty === p.specialty) ?? doctors.data?.[0];
+    if (!doctor) return;
+    router.push(`/booking/${doctor.id}?package=${p.id}` as never);
   };
 
   return (
@@ -126,7 +129,7 @@ export default function PackageDetail() {
               icon="building"
               title={pickLang(isRTL, clinic.data.name, clinic.data.name_ar)}
               subtitle={pickLang(isRTL, clinic.data.area, clinic.data.area_ar)}
-              onPress={() => router.push(`/clinics/${clinic.data!.id}`)}
+              onPress={() => router.push(`/clinics/${clinic.data!.id}?specialty=${p.specialty}`)}
             />
           </Card>
         </>

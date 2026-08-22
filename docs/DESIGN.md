@@ -56,7 +56,7 @@ approved UI ports onto the live Supabase/HAMS backend without backend changes.
 - **Colors** — Russian Violet `#2E1A47` (primary/ink), Shocking Lavender `#DFC8E7`
   (accent, selected states), Smooth Pastel Blue `#C3D7EE` (accent 2 / info), Eye White
   `#F9F4FA` (background). Dark mode = deep-violet derived palette (same 25 semantic roles as prod).
-- **Type** — Arabic: 29LT Zarid Sans (static Regular/Medium/SemiBold/Bold, +15 % size bump).
+- **Type** — Arabic: 29LT Zarid Sans (static Regular/Medium/SemiBold/Bold, ×1.08 **+ 1 px**).
   English body/UI: Manrope. English display: Agatho serif. Numerals: Western digits in both languages (Omani convention).
 - **Signature shapes** — slant-edge CTA button (mirrored in RTL); connected-dots “link”
   pattern and soft orbs as low-opacity decoration on hero cards, success screens, empty states.
@@ -131,3 +131,81 @@ approved UI ports onto the live Supabase/HAMS backend without backend changes.
 4. **Sheets avoid the keyboard.** The bottom sheet now wraps its content in a
    KeyboardAvoidingView + ScrollView, so the review comment box (and the new
    family form) stay visible while typing.
+
+## Revision 4 (client feedback, 2026-08-11)
+
+1. **Profile switching.** One login, many files. The account holder taps their
+   avatar (Home) or the identity card (Profile) to switch to any family member;
+   appointments, medical history and the insurance card all follow the active
+   person (`appStore.activePatientId` → `appointment.list(tab, patientId)`,
+   `patient.getMedicalHistory(patientId)`, `patient.getInsurance(patientId)`).
+   A blue "you're viewing X's file" banner with a one-tap way back appears on
+   Home and Visits so the context is never ambiguous, booking pre-selects the
+   active person, and members have no login of their own — only the account
+   holder can add members or switch. `activePatientId` is deliberately NOT
+   persisted: every launch starts on your own file and it can never point at a
+   member who has since been removed.
+2. **Tab 5 is "Profile"** (was "My File"), reorganised into *My health records*
+   (medical history, insurance) and *Account* (family, favourites, settings).
+3. **Browsing reworked.** The home search bar and the Explore tab no longer do
+   the same job: the search bar opens `/search` (the universal hub), and the
+   Explore tab opens the clinics browser **map-first**. `/clinics` opens the
+   same browser list-first, so "see all" under Clinics and the Explore tab are
+   two routes to one screen. Extracted `src/features/{Doctors,Clinics,Packages}Browser`
+   so every entry point shares one implementation.
+4. **A service is not only doctors.** Tapping a specialty opens
+   `/services/[specialty]` with a Doctors ⇄ Clinics switch, both filtered to
+   that specialty (a clinic "offers" a specialty when its doctors or its
+   service menu do), each side keeping its own scoped search and filters.
+5. **Filters everywhere the section names got more general.** "Highly rated
+   doctors" → **Doctors** and "Clinics near you" → **Clinics**; rating and
+   distance moved into filters (clinics also gained facility type and open-now,
+   packages gained sort / max price / test count / discounted-only).
+6. **Date of birth is a calendar,** not a typed string — a custom bilingual
+   picker (`DateField`) built on our own month/day names, because the native
+   picker renders in the *device* locale and would show English months inside
+   an Arabic form. It expands inline rather than in a modal, since it's used
+   inside bottom sheets and modal-in-modal doesn't stack reliably.
+7. Gender chips in the family list use two different hues at equal weight —
+   one shared colour carried no information.
+
+## Revision 5 (client feedback, 2026-08-17)
+
+1. **The guest boundary is now a rule, not four screen checks.** A guest may
+   browse the entire catalogue — doctors, clinics, packages, prices, hours,
+   reviews, map — but *anything that reads or writes a patient file stops at a
+   sign-in wall*: booking, favourites, notifications. `useAuthWall()`
+   (`src/components/AuthWall.tsx`) is the single implementation: it wraps the
+   action, and after signing in the patient resumes exactly where they were
+   (`/auth/sign-in?next=…`), so the wall never costs them their place.
+   Previously only Home, Visits, Records and Profile checked `guest`, which let
+   a guest book two appointments **and see the account holder's family members**
+   in the "who is this visit for?" step, save favourites into a list they had no
+   screen to read, and read someone's payment receipts in Notifications. The
+   booking route enforces the wall itself (not only the buttons that lead to
+   it), and never loads family data while unauthenticated.
+2. **A facility now staffs exactly what it advertises.** The catalogue used to
+   generate clinics and doctors independently — a doctor picked a random clinic
+   and a random specialty its *type* allowed — so 75 of 129 advertised
+   (clinic, specialty) pairs had no such doctor, 15 clinics had no doctors at
+   all, and every `doctors_count` badge disagreed with the list it sat above.
+   `rosterFor()` now generates each clinic's roster **from its service menu**:
+   every advertised specialty gets a doctor, doctors never practise a specialty
+   the clinic doesn't advertise, and `doctors_count` *is* the roster length.
+   Health packages follow the same rule — each carries the specialty that
+   performs it and is only offered by a clinic that staffs it.
+3. **Specialty context survives the tap.** Landing on `/services/pediatrics`
+   and opening a clinic keeps the reason you're there: the clinic screen scopes
+   its doctor list to that specialty ("Pediatrics doctors (2)") with one tap to
+   see the rest, instead of dumping every doctor in the building on somebody who
+   came for one thing.
+4. **Filters only offer what exists.** The facility-type chips come from a
+   facet (`discovery.clinicTypes(specialty)`), so Pediatrics offers Hospital and
+   Clinic and hides Dental / Laboratory / Physiotherapy / Optical — chips that
+   could only ever return nothing. With a single possible type they disappear.
+5. **"Book" never guesses a doctor.** A service row with several qualified
+   doctors opens a picker ("Who should see you for Orthopedic consultation?");
+   with one, it goes straight to booking. Silently falling back to the first
+   doctor in the list is how a patient books a pediatric visit with a
+   cardiologist. Every service line now carries a specialty — untagged rows
+   were the only reason that fallback existed.

@@ -12,6 +12,25 @@ export function consultationTotal(fee: number) {
   return { fee: round3(fee), vat, total: round3(fee + vat) };
 }
 
+/**
+ * Arabic-Indic (٠–٩) and Extended Arabic-Indic (۰–۹) digits → ASCII, so a
+ * number typed on an Arabic keyboard validates and stores like any other.
+ * (JS \d only matches ASCII — without this, ٩١٢٣ counts as zero digits.)
+ */
+export function toWesternDigits(s: string): string {
+  return s
+    .replace(/[٠-٩]/g, (d) => String(d.charCodeAt(0) - 0x0660))
+    .replace(/[۰-۹]/g, (d) => String(d.charCodeAt(0) - 0x06f0));
+}
+
+/**
+ * LTR bidi isolate (U+2066 LRI … U+2069 PDI). Phone numbers, masked IDs, and
+ * "O+"-style tokens are LTR digit runs split by neutral characters (space, +,
+ * •), so RTL layout reorders the groups ("+968 9123 4567" → "4567 9123 968+")
+ * unless the whole token is isolated.
+ */
+export const ltr = (s: string) => `⁦${s}⁩`;
+
 export function formatOMR(amount: number, i18n: Pick<I18n, "isRTL" | "t">): string {
   const value = amount.toFixed(3);
   return i18n.isRTL ? `${value} ر.ع` : `OMR ${value}`;

@@ -5,8 +5,9 @@ import { useTheme } from "@/theme";
 import { pickLang, useI18n } from "@/i18n";
 import { repositories } from "@/data";
 import { useQueryish } from "@/data/hooks";
+import { useAppStore } from "@/stores/appStore";
 import type { NotificationItem } from "@/data/types";
-import { AppHeader, AppText, Card, EmptyState, Icon, Screen, type IconName } from "@/components/ui";
+import { AppHeader, AppText, Button, Card, EmptyState, Icon, Screen, type IconName } from "@/components/ui";
 
 const KIND_ICON: Record<NotificationItem["kind"], IconName> = {
   assistant: "sparkle",
@@ -20,7 +21,9 @@ const KIND_ICON: Record<NotificationItem["kind"], IconName> = {
 export default function Notifications() {
   const { colors, spacing, row, isRTL } = useTheme();
   const { t } = useI18n();
-  const list = useQueryish(() => repositories.notification.list(), []);
+  // Reminders and payment receipts belong to a file — a guest has none.
+  const authed = useAppStore((s) => s.authed);
+  const list = useQueryish(() => (authed ? repositories.notification.list() : Promise.resolve([])), [authed]);
 
   const groups: { key: "today" | "earlier"; items: NotificationItem[] }[] = [
     { key: "today", items: (list.data ?? []).filter((n) => n.minutes_ago < 60 * 24) },
@@ -32,6 +35,19 @@ export default function Notifications() {
     if (mins < 60 * 24) return `${Math.round(mins / 60)} ${isRTL ? "س" : "h"}`;
     return `${Math.round(mins / (60 * 24))} ${isRTL ? "ي" : "d"}`;
   };
+
+  if (!authed) {
+    return (
+      <Screen header={<AppHeader back title={t("notif.title")} />}>
+        <EmptyState
+          icon="lock"
+          title={t("authWall.title")}
+          body={t("authWall.body")}
+          action={<Button label={t("common.signIn")} onPress={() => router.push("/auth/sign-in?next=%2Fnotifications" as never)} />}
+        />
+      </Screen>
+    );
+  }
 
   return (
     <Screen

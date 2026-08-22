@@ -6,13 +6,16 @@ import { pickLang, useI18n } from "@/i18n";
 import { repositories } from "@/data";
 import { useQueryish } from "@/data/hooks";
 import { formatShortDate } from "@/utils/format";
+import { personName, useActivePerson } from "@/components/ProfileSwitcher";
 import { AppHeader, AppText, Badge, Card, Divider, Icon, Orbs, Screen } from "@/components/ui";
 
 export default function Insurance() {
   const { colors, spacing, radii, row, isRTL } = useTheme();
   const { t } = useI18n();
-  const insurance = useQueryish(() => repositories.patient.getInsurance(), []);
-  const profile = useQueryish(() => repositories.patient.getProfile(), []);
+  // Family members are dependents on the account holder's policy — the card
+  // shows their own member number under the same provider.
+  const { activePatientId, person } = useActivePerson();
+  const insurance = useQueryish(() => repositories.patient.getInsurance(activePatientId), [activePatientId]);
   const ins = insurance.data;
   if (!ins) return <Screen header={<AppHeader back title={t("records.insurance")} />}>{null}</Screen>;
 
@@ -42,7 +45,7 @@ export default function Insurance() {
         </View>
         <View style={{ flexDirection: row, justifyContent: "space-between", alignItems: "flex-end" }}>
           <AppText role="label" color="#DFC8E7">
-            {profile.data ? pickLang(isRTL, profile.data.full_name, profile.data.full_name_ar) : ""}
+            {person ? personName(person, isRTL) : ""}
           </AppText>
           <AppText role="tiny" color="#C9B8D6">
             {t("records.validUntil")} {formatShortDate(ins.expiry_date, t)}

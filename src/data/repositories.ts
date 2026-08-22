@@ -14,6 +14,7 @@ import type {
   NewAppointment,
   NotificationItem,
   PatientProfile,
+  Person,
   Specialty,
 } from "./types";
 
@@ -35,11 +36,16 @@ export interface DoctorSearchParams {
 }
 
 export interface PatientRepository {
+  /** The account holder's own profile. */
   getProfile(): Promise<PatientProfile>;
   updateProfile(patch: Partial<PatientProfile>): Promise<PatientProfile>;
-  getMedicalHistory(): Promise<MedicalHistory>;
-  /** Display/storage only — no claims execution. */
-  getInsurance(): Promise<InsuranceCard>;
+  /** Account holder + family members — the profile switcher's data source. */
+  listPeople(): Promise<Person[]>;
+  getPerson(patientId: string): Promise<Person | null>;
+  /** Records are per person: "self" or a family member id. */
+  getMedicalHistory(patientId?: string): Promise<MedicalHistory>;
+  /** Display/storage only — no claims execution. Members are dependents on the same policy. */
+  getInsurance(patientId?: string): Promise<InsuranceCard>;
 }
 
 export interface FamilyRepository {
@@ -48,12 +54,38 @@ export interface FamilyRepository {
   remove(id: string): Promise<void>;
 }
 
+export interface ClinicSearchParams {
+  query?: string;
+  /** Clinics that offer this specialty — services and doctors are both considered. */
+  specialty?: string;
+  type?: Clinic["type"] | null;
+  maxDistanceKm?: number;
+  minRating?: number;
+  openNow?: boolean;
+}
+
+export interface PackageSearchParams {
+  query?: string;
+  maxPrice?: number;
+  minTests?: number;
+  discountedOnly?: boolean;
+  clinicId?: string;
+  sort?: "popular" | "priceAsc" | "priceDesc" | "tests";
+}
+
 export interface DiscoveryRepository {
   listSpecialties(): Promise<Specialty[]>;
   featuredClinics(): Promise<Clinic[]>;
-  searchClinics(term: string): Promise<Clinic[]>;
+  /** A bare string stays supported (term-only search) for existing call sites. */
+  searchClinics(params?: string | ClinicSearchParams): Promise<Clinic[]>;
+  /**
+   * Facet: facility types that actually have clinics offering this specialty.
+   * The filter chips are built from this, so a locked specialty can't offer
+   * "Dental" when no dental clinic does pediatrics.
+   */
+  clinicTypes(specialty?: string): Promise<Clinic["type"][]>;
   getClinic(id: string): Promise<Clinic | null>;
-  searchPackages(term: string): Promise<HealthPackage[]>;
+  searchPackages(params?: string | PackageSearchParams): Promise<HealthPackage[]>;
   getPackage(id: string): Promise<HealthPackage | null>;
 }
 
@@ -65,7 +97,8 @@ export interface DoctorRepository {
 }
 
 export interface AppointmentRepository {
-  list(tab: "upcoming" | "past"): Promise<Appointment[]>;
+  /** Scoped to a person when patientId is given (profile switching). */
+  list(tab: "upcoming" | "past", patientId?: string): Promise<Appointment[]>;
   get(id: string): Promise<Appointment | null>;
   getSlots(params: { doctorId: string; date: string }): Promise<AvailableSlot[]>;
   create(input: NewAppointment): Promise<Appointment>;

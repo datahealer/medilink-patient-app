@@ -25,14 +25,17 @@ Prototype interfaces are a *subset* with the same verbs. Rebind as follows:
 |---|---|
 | `patient.getProfile()` | `patient.getProfile()` (`PatientProfile`) |
 | `patient.updateProfile(patch)` | `patient.updateProfile(...)` (bilingual name fields are additive columns, see below) |
-| `patient.getMedicalHistory()` | `medicalHistory.get()` |
+| `patient.listPeople()` / `getPerson(id)` | **new (client-side)** — compose from `patient.getProfile()` + `family.list()`; no new endpoint needed |
+| `patient.getMedicalHistory(patientId?)` | `medicalHistory.get(patientId)` — must accept a dependent id (see profile switching below) |
 | `patient.getInsurance()` | **new** — read `patient_insurance` (table exists; add a small shared api fn) |
 | `family.list/add/remove` | `family.list/add/remove` |
-| `discovery.listSpecialties/featuredClinics/searchClinics/getClinic` | `discovery.*` (same names) |
+| `discovery.listSpecialties/featuredClinics/getClinic` | `discovery.*` (same names) |
+| `discovery.searchClinics(params)` | `discovery.searchClinics(...)` — the prototype params add `specialty`, `type`, `maxDistanceKm`, `minRating`, `openNow`; specialty resolves via the facility's doctors/services |
+| `discovery.clinicTypes(specialty?)` | **new (facet)** — distinct `facility.type` among facilities offering the specialty; one cheap `select distinct` (or a facet count in the search response). The filter chips are built from it, so they can't offer a type that returns nothing |
 | `discovery.searchPackages/getPackage` | **new** — see “Additive backend work” |
 | `doctor.search/get/reviews` | `doctor.search/get/reviews` |
 | `doctor.top()` | `doctor.search({ topRated: true, limit: 6 })` |
-| `appointment.list("upcoming"\|"past")` | `appointment.list(tab)` |
+| `appointment.list(tab, patientId?)` | `appointment.list(tab)` — filter server-side by patient/dependent id; the prototype filters on `Appointment.patient_id` |
 | `appointment.getSlots({doctorId, date})` | `appointment.getSlots(...)` → `get_available_slots` RPC (never compute slots client-side) |
 | `appointment.create(NewAppointment)` | `appointment.create(...)` → `book_appointment_atomic`, then always `payment.createCheckout` — **card is the only patient-facing method** (pay-at-clinic removed 2026-08-10) and the processor (Thawani) is never named in the UI |
 | `appointment.cancel/reschedule/checkIn` | same (`cancel_appointment_safe`, `reschedule_appointment_atomic`, `checkin_my_appointment`) |
@@ -106,3 +109,89 @@ checkout, and never surface the processor name to patients). Favourites are
 kind-aware and listed in ملفي; profile editing goes through
 `patient.updateProfile`; family add/remove use the existing `family.*` verbs.
 Help & support is fully client-side (i18n FAQ + `tel:`/`mailto:`/WhatsApp links).
+
+## Profile switching (2026-08-11) — the one thing to check on the backend
+
+The UI now reads any family member's file under a single login. Everything is
+scoped by an "active patient id" (`"self"` or a family member id) held in
+`appStore.activePatientId` and passed into the repositories. Before porting,
+confirm on the production side:
+
+1. **Appointments carry the dependent.** The prototype adds
+   `Appointment.patient_id`. If production books dependents against a
+   `family_member_id` (or `dependent_id`) column, map it to `patient_id` in the
+   repository layer — no UI change needed. If it does *not* exist yet, that's an
+   additive column plus a filter in `appointment.list`.
+2. **RLS must allow it.** The account holder reads their dependents' rows;
+   dependents have no login at all. Verify the row-level-security policies on
+   `appointments`, `medical_history` and `patient_insurance` permit
+   guardian-reads, and never widen them beyond one household.
+3. **Insurance dependents.** The prototype derives a per-member number from the
+   holder's policy (`member_id-01`, `-02`, …). Replace with the real dependent
+   number if `patient_insurance` stores one.
+4. Per-person medical history is keyed by person in the mock
+   (`HISTORY_BY_PERSON`); newly added members intentionally show a designed
+   "no records yet" empty state rather than the holder's file.
+
+## Guest boundary (2026-08-17) — enforce it server-side too
+
+The UI's rule is: browsing is open, **anything touching a patient file requires
+a session** (booking, favourites, notifications, records). It is enforced in one
+place client-side (`useAuthWall()`, plus a check inside `/booking/[doctorId]` for
+deep links). Client-side gating is a UX affordance, not security — on the
+production side make sure the same boundary is a *server* boundary:
+
+1. `family.list`, `favourite.*`, `notification.*`, `appointment.*` and
+   `medicalHistory/insurance` reads must all reject anonymous callers via RLS,
+   not merely be hidden by the app.
+2. `book_appointment_atomic` must derive the patient from the session, never
+   from a client-supplied id, or a guest session could book against the holder.
+   (The prototype's mock did exactly this: a guest booking was written into the
+   account holder's list under *their* name.)
+3. Public catalogue reads (facilities, doctors, packages, specialties, reviews)
+   stay anonymous-readable — that's the part guests are meant to see.
+
+## Catalogue invariants (2026-08-17)
+
+The mock generator now guarantees, and the production data should satisfy:
+
+- Every service a facility lists maps to a specialty (`ClinicService.specialty`),
+  and the facility employs at least one doctor of that specialty. The UI relies
+  on this to route "Book" without guessing; where it can't, it asks the patient.
+- `Clinic.doctors_count` equals the number of doctors the detail screen lists.
+  If production stores a denormalised count, verify it against
+  `doctor.search({clinicId})` during the port or derive it.
+- `HealthPackage.specialty` (+proto) is the specialty that performs the package;
+  packages are only offered by facilities that staff it. If production has no
+  such column, add it (additive) or map from the package's service lines.
+
+## Round 6 client feedback (2026-08-20)
+
+- **Map must be Google.** The prototype renders Google's public raster tiles
+  through Leaflet in a WebView (no API key — fine for a demo, not licensed for
+  production). The port must swap `src/components/ClinicMap.tsx` for
+  `react-native-maps` with `PROVIDER_GOOGLE` + a billing-enabled Maps API key
+  (iOS needs the config plugin & a dev build). Keep the medical-cross pin.
+- **Guest booking / silent sign-up.** Booking is open to guests end-to-end;
+  just before payment the wizard collects phone + who-for + patient age — plus
+  the patient's full name when the visit is for a relative — sends an OTP, and
+  verifying it signs the user up (new number) or in (known number) with no
+  account language anywhere. Production mapping: `signInWithOtp` on the phone
+  number, then `family.add` (relation + typed name + age→DOB) for non-self
+  relations, then `book_appointment_atomic`. The typed name fills both language
+  slots of the file; production should transliterate the missing script.
+- **Consents are asked once, ever** (`appStore.patientConsents` /
+  `clinicConsents` / `promoConsent`): PDPL data+terms per patient, clinic
+  contact (phone/WA/email, service comms) per clinic, Medilink promotional
+  content once per account (granted or declined). Production should persist
+  these on the server (consent audit table), not in the client store.
+- **No insurance anywhere in the catalogue** — self-paying bookings only.
+  `Clinic.accepted_insurances` and the insurance search param were deleted.
+  (The patient's own insurance card under Profile stays: display/storage only.)
+- **No clinic phone numbers** in listings or details — journeys stay in-app.
+- **"Featured" is not a tag** — featured clinics get their own curated home
+  section (`discovery.featuredClinics`); the `featured` TagKey was removed.
+- **Doctor services beyond consultation** (`Doctor.services` +proto): shown
+  collapsed as "+n more services" on the doctor screen. Production needs a
+  doctor_services table (or service-menu join) with per-doctor prices.
+- **The Me assistant tab is hidden** (TabBar `TABS` array) — route intact.

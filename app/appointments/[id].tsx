@@ -6,7 +6,7 @@ import { pickLang, useI18n } from "@/i18n";
 import { repositories } from "@/data";
 import { useQueryish } from "@/data/hooks";
 import { consultationTotal, formatDayDate, formatOMR, formatTime } from "@/utils/format";
-import { fontFamilyFor } from "@/theme/typography";
+import { figuresFor, fontFamilyFor, inputFontSize } from "@/theme/typography";
 import { openDirections } from "@/utils/actions";
 import {
   AppHeader,
@@ -288,7 +288,8 @@ export default function AppointmentDetail() {
             backgroundColor: colors.inputBackground,
             padding: 14,
             fontFamily: fontFamilyFor("body", "medium", isRTL),
-            fontSize: 14,
+            ...figuresFor(isRTL),
+            fontSize: inputFontSize(14, isRTL),
             color: colors.text,
             textAlign: isRTL ? "right" : "left",
             textAlignVertical: "top",

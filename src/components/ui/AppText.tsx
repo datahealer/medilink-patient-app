@@ -1,7 +1,7 @@
 import React from "react";
 import { Text, type StyleProp, type TextProps, type TextStyle } from "react-native";
 import { useTheme } from "@/theme";
-import { ARABIC_FONT_SCALE, fontFamilyFor, typeRoles, type FontWeight, type TextRole } from "@/theme/typography";
+import { figuresFor, fontFamilyFor, scaleType, typeRoles, type FontWeight, type TextRole } from "@/theme/typography";
 
 export interface AppTextProps extends Omit<TextProps, "role"> {
   role?: TextRole;
@@ -31,7 +31,7 @@ export function AppText({
   const variant = typeRoles[role];
   const w = weight ?? variant.weight;
   const family = fontFamilyFor(serif ? "heading" : variant.role, w, isRTL);
-  const scale = isRTL ? ARABIC_FONT_SCALE : 1;
+  const { fontSize, lineHeight } = scaleType(variant.fontSize, variant.lineHeight, isRTL);
 
   const textAlign: TextStyle["textAlign"] =
     align === "center" ? "center" : align === "auto" ? undefined : (align === "start") === !isRTL ? "left" : "right";
@@ -42,8 +42,9 @@ export function AppText({
       style={[
         {
           fontFamily: family,
-          fontSize: variant.fontSize * scale,
-          lineHeight: variant.lineHeight * scale,
+          ...figuresFor(isRTL),
+          fontSize,
+          lineHeight,
           color: color ?? colors.text,
           textAlign,
           writingDirection: isRTL ? "rtl" : "ltr",

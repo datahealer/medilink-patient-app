@@ -6,7 +6,7 @@ import { pickLang, useI18n } from "@/i18n";
 import { repositories } from "@/data";
 import { useQueryish } from "@/data/hooks";
 import { useAppStore } from "@/stores/appStore";
-import { ageFrom } from "@/utils/format";
+import { ageFrom, ltr } from "@/utils/format";
 import {
   AppHeader,
   AppText,
@@ -51,15 +51,15 @@ export default function Profile() {
                 {pickLang(isRTL, p.full_name, p.full_name_ar)}
               </AppText>
               <AppText role="caption" color={colors.textMuted}>
-                {p.phone} · {p.email}
+                {ltr(p.phone)} · {p.email}
               </AppText>
             </View>
           </View>
           <View style={{ flexDirection: row, gap: 8, marginTop: 14 }}>
             {[
-              { label: t("profile.bloodGroup"), value: p.blood_group },
-              { label: t("profile.age"), value: String(ageFrom(p.date_of_birth)) },
-              { label: t("profile.civil"), value: `•••• ${p.civil_number.slice(-4)}` },
+              { label: t("profile.bloodGroup"), value: ltr(p.blood_group) },
+              { label: t("profile.age"), value: ltr(String(ageFrom(p.date_of_birth))) },
+              { label: t("profile.civil"), value: ltr(`•••• ${p.civil_number.slice(-4)}`) },
             ].map((s) => (
               <View key={s.label} style={{ flex: 1, backgroundColor: colors.surfaceAlt, borderRadius: 14, alignItems: "center", paddingVertical: 10, gap: 2 }}>
                 <AppText role="cardTitle" weight="bold">

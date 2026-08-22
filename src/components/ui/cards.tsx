@@ -1,5 +1,5 @@
 import React from "react";
-import { Pressable, View } from "react-native";
+import { Pressable, useWindowDimensions, View } from "react-native";
 import { router } from "expo-router";
 import { useTheme } from "@/theme";
 import { useI18n, pickLang } from "@/i18n";
@@ -12,12 +12,41 @@ import { Badge, Card, Rating } from "./primitives";
 
 /* ------------------------------ SpecialtyTile ---------------------------- */
 const TILE_TONES = ["#EFE3F5", "#E2ECF8", "#F4EEF9", "#EAF2E9"] as const;
+const TILE_MIN_WIDTH = 72;
+const TILE_GAP = 8;
 
-export function SpecialtyTile({ specialty, index, onPress }: { specialty: Specialty; index: number; onPress: () => void }) {
+/**
+ * Column maths for the specialty grid. Tiles never shrink past TILE_MIN_WIDTH,
+ * so the wider hardware earns another column (five on a 16 Pro Max, four on a
+ * standard phone) instead of leaving a dead gutter down the side. Columns are
+ * a fixed width and the row fills from the start, so a short trailing row
+ * stays aligned under the one above it.
+ */
+export function useSpecialtyGrid(count?: number) {
+  const { width } = useWindowDimensions();
+  const { spacing } = useTheme();
+  const usable = width - spacing.md * 2;
+  let columns = Math.max(4, Math.floor((usable + TILE_GAP) / (TILE_MIN_WIDTH + TILE_GAP)));
+  if (count) columns = Math.min(columns, count);
+  return { columns, tileWidth: Math.floor((usable - TILE_GAP * (columns - 1)) / columns), gap: TILE_GAP };
+}
+
+export function SpecialtyTile({
+  specialty,
+  index,
+  width = 76,
+  onPress,
+}: {
+  specialty: Specialty;
+  index: number;
+  /** Column width from useSpecialtyGrid — the tile owns its own centring. */
+  width?: number;
+  onPress: () => void;
+}) {
   const { colors, isRTL, scheme } = useTheme();
   const tone = TILE_TONES[index % TILE_TONES.length];
   return (
-    <Pressable onPress={onPress} accessibilityRole="button" style={({ pressed }) => ({ width: 76, alignItems: "center", gap: 6, opacity: pressed ? 0.7 : 1 })}>
+    <Pressable onPress={onPress} accessibilityRole="button" style={({ pressed }) => ({ width, alignItems: "center", gap: 6, opacity: pressed ? 0.7 : 1 })}>
       <View
         style={{
           width: 58,
@@ -30,7 +59,7 @@ export function SpecialtyTile({ specialty, index, onPress }: { specialty: Specia
       >
         <Icon name={specialty.icon as IconName} size={26} color={scheme === "dark" ? colors.text : "#2E1A47"} strokeWidth={1.5} />
       </View>
-      <AppText role="tiny" align="center" color={colors.textMuted} numberOfLines={2} style={{ width: 76 }}>
+      <AppText role="tiny" align="center" color={colors.textMuted} numberOfLines={2} style={{ width }}>
         {pickLang(isRTL, specialty.name, specialty.name_ar)}
       </AppText>
     </Pressable>
@@ -90,13 +119,15 @@ export function DoctorCard({ doctor, compact }: { doctor: Doctor; compact?: bool
 }
 
 /* -------------------------------- ClinicCard ----------------------------- */
-export function ClinicCard({ clinic, wide }: { clinic: Clinic; wide?: boolean }) {
+/** `specialty` keeps the reason you're looking at this clinic — the detail screen scopes to it. */
+export function ClinicCard({ clinic, wide, specialty }: { clinic: Clinic; wide?: boolean; specialty?: string | null }) {
   const { colors, row, isRTL, spacing } = useTheme();
   const { t } = useI18n();
   const name = pickLang(isRTL, clinic.name, clinic.name_ar);
   const area = pickLang(isRTL, `${clinic.area}, ${clinic.city}`, `${clinic.area_ar}، ${clinic.city_ar}`);
+  const href = specialty ? `/clinics/${clinic.id}?specialty=${specialty}` : `/clinics/${clinic.id}`;
   return (
-    <Card onPress={() => router.push(`/clinics/${clinic.id}`)} padded={false} style={wide ? undefined : { width: 250 }}>
+    <Card onPress={() => router.push(href)} padded={false} style={wide ? undefined : { width: 250 }}>
       <ClinicCover hue={clinic.coverHue} type={clinic.type} height={74}>
         {clinic.tag ? (
           <View style={{ position: "absolute", top: 8, start: 10 }}>
@@ -146,7 +177,16 @@ export function statusTone(status: Appointment["status"]): { tone: "success" | "
   }
 }
 
-export function AppointmentRow({ appointment, doctor }: { appointment: Appointment; doctor: Doctor | undefined }) {
+export function AppointmentRow({
+  appointment,
+  doctor,
+  showPatient,
+}: {
+  appointment: Appointment;
+  doctor: Doctor | undefined;
+  /** Household view: say whose visit each row is. */
+  showPatient?: boolean;
+}) {
   const { colors, row, isRTL, spacing } = useTheme();
   const i18n = useI18n();
   const { t } = i18n;
@@ -166,6 +206,14 @@ export function AppointmentRow({ appointment, doctor }: { appointment: Appointme
               {formatShortDate(appointment.slot_date, t)} · {formatTime(appointment.slot_start, i18n)}
             </AppText>
           </View>
+          {showPatient ? (
+            <View style={{ flexDirection: row, alignItems: "center", gap: 5 }}>
+              <Icon name="user" size={12} color={colors.textFaint} />
+              <AppText role="tiny" color={colors.textFaint} numberOfLines={1}>
+                {t("appointments.forPatient", { name: pickLang(isRTL, appointment.patient_name, appointment.patient_name_ar) })}
+              </AppText>
+            </View>
+          ) : null}
         </View>
         <Badge label={t(st.key as never)} tone={st.tone} />
       </View>

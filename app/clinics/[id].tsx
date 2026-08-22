@@ -1,5 +1,5 @@
-import React from "react";
-import { Linking, Pressable, View } from "react-native";
+import React, { useState } from "react";
+import { Pressable, View } from "react-native";
 import { openDirections, shareWhatsApp } from "@/utils/actions";
 import { FavButton } from "@/components/FavButton";
 import { router, useLocalSearchParams } from "expo-router";
@@ -7,10 +7,12 @@ import { useTheme } from "@/theme";
 import { pickLang, useI18n } from "@/i18n";
 import { repositories } from "@/data";
 import { useQueryish } from "@/data/hooks";
+import type { ClinicService, Doctor } from "@/data/types";
 import { formatOMR } from "@/utils/format";
 import {
   AppHeader,
   AppText,
+  Avatar,
   Badge,
   Card,
   ClinicCover,
@@ -20,16 +22,23 @@ import {
   Rating,
   Screen,
   SectionHeader,
+  Sheet,
   Skeleton,
 } from "@/components/ui";
 
 export default function ClinicDetail() {
-  const { id } = useLocalSearchParams<{ id: string }>();
+  // `specialty` is the reason the patient is here (they tapped a service, or a
+  // clinic in a specialty-scoped list). Keeping it stops this screen from
+  // dumping every doctor in the building on somebody who came for one thing.
+  const { id, specialty } = useLocalSearchParams<{ id: string; specialty?: string }>();
   const { colors, spacing, radii, row, isRTL } = useTheme();
   const i18n = useI18n();
   const { t } = i18n;
   const clinic = useQueryish(() => repositories.discovery.getClinic(id!), [id]);
   const doctors = useQueryish(() => repositories.doctor.search({ clinicId: id! }), [id]);
+  const specialties = useQueryish(() => repositories.discovery.listSpecialties(), []);
+  const [showAllDoctors, setShowAllDoctors] = useState(false);
+  const [picking, setPicking] = useState<{ service: string; doctors: Doctor[] } | null>(null);
 
   const c = clinic.data;
   if (!c) {
@@ -50,10 +59,34 @@ export default function ClinicDetail() {
       (now.getHours() * 60 + now.getMinutes() >= toMin(todayHours.open) &&
         now.getHours() * 60 + now.getMinutes() < toMin(todayHours.close!)));
 
-  const bookService = (specialty?: string) => {
-    const match =
-      (specialty && doctors.data?.find((d) => d.specialty === specialty)) || doctors.data?.[0];
-    if (match) router.push(`/booking/${match.id}`);
+  const allDoctors = doctors.data ?? [];
+  const specialtyName = (slug?: string) => {
+    const s = specialties.data?.find((x) => x.id === slug);
+    return s ? pickLang(isRTL, s.name, s.name_ar) : "";
+  };
+  const scopedDoctors = specialty ? allDoctors.filter((d) => d.specialty === specialty) : allDoctors;
+  const shownDoctors = specialty && !showAllDoctors ? scopedDoctors : allDoctors;
+
+  /**
+   * Never guess. One doctor performs the service → straight to booking; several
+   * → the patient picks. Silently defaulting to the first doctor in the list is
+   * how somebody books a pediatric visit with a cardiologist.
+   * Guests book too — identity is confirmed just before payment, in the wizard.
+   */
+  const bookService = (service: ClinicService) => {
+    const matches = service.specialty ? allDoctors.filter((d) => d.specialty === service.specialty) : allDoctors;
+    const options = matches.length ? matches : allDoctors;
+    const name = pickLang(isRTL, service.name, service.name_ar);
+    if (options.length === 1) {
+      router.push(`/booking/${options[0].id}` as never);
+      return;
+    }
+    if (options.length) setPicking({ service: name, doctors: options });
+  };
+
+  const bookWith = (doctor: Doctor) => {
+    setPicking(null);
+    router.push(`/booking/${doctor.id}` as never);
   };
 
   return (
@@ -103,9 +136,9 @@ export default function ClinicDetail() {
         {pickLang(isRTL, c.description, c.description_ar)}
       </AppText>
 
-      {/* Contact actions */}
+      {/* Directions only — no phone numbers on clinic pages (client feedback
+          2026-08-20): every journey stays inside the app's booking flow. */}
       <View style={{ flexDirection: row, gap: 8, marginTop: spacing.md }}>
-        <ActionPill icon="phone" label={t("common.call")} onPress={() => Linking.openURL(`tel:${c.phone.replace(/\s/g, "")}`)} />
         <ActionPill
           icon="navigation"
           label={t("common.directions")}
@@ -129,7 +162,7 @@ export default function ClinicDetail() {
                 </AppText>
               </View>
               <Pressable
-                onPress={() => bookService(s.specialty)}
+                onPress={() => bookService(s)}
                 accessibilityRole="button"
                 style={({ pressed }) => ({
                   backgroundColor: colors.accent,
@@ -168,21 +201,72 @@ export default function ClinicDetail() {
         ))}
       </Card>
 
-      {/* Doctors */}
-      <SectionHeader title={t("clinic.doctors")} />
+      {/* Doctors — scoped to why the patient came, with a way out */}
+      <SectionHeader
+        title={
+          specialty && !showAllDoctors
+            ? t("clinic.doctorsIn", { name: specialtyName(specialty), n: scopedDoctors.length })
+            : t("clinic.doctors")
+        }
+        actionLabel={
+          specialty
+            ? showAllDoctors
+              ? t("clinic.onlySpecialty", { name: specialtyName(specialty) })
+              : t("clinic.allDoctors", { n: allDoctors.length })
+            : undefined
+        }
+        onAction={specialty ? () => setShowAllDoctors((v) => !v) : undefined}
+      />
       <View style={{ gap: 10 }}>
-        {(doctors.data ?? []).map((d) => (
+        {shownDoctors.map((d) => (
           <DoctorCard key={d.id} doctor={d} />
         ))}
       </View>
 
-      {/* Insurance */}
-      <SectionHeader title={t("clinic.insurances")} />
-      <View style={{ flexDirection: row, flexWrap: "wrap", gap: 8, marginBottom: spacing.md }}>
-        {c.accepted_insurances.map((ins) => (
-          <Badge key={ins} label={ins} tone="blue" />
-        ))}
-      </View>
+      {/* Which doctor performs the service you tapped */}
+      <Sheet
+        visible={!!picking}
+        onClose={() => setPicking(null)}
+        title={picking ? t("clinic.pickDoctor", { service: picking.service }) : ""}
+      >
+        <View style={{ gap: 8 }}>
+          {(picking?.doctors ?? []).map((d) => {
+            const dName = pickLang(isRTL, d.full_name, d.full_name_ar);
+            return (
+              <Pressable
+                key={d.id}
+                onPress={() => bookWith(d)}
+                accessibilityRole="button"
+                style={({ pressed }) => ({
+                  flexDirection: row,
+                  alignItems: "center",
+                  gap: 12,
+                  padding: 10,
+                  borderRadius: radii.md,
+                  borderWidth: 1,
+                  borderColor: colors.border,
+                  backgroundColor: colors.surface,
+                  opacity: pressed ? 0.7 : 1,
+                })}
+              >
+                <Avatar name={dName} hue={d.avatarHue} size={42} />
+                <View style={{ flex: 1 }}>
+                  <AppText role="label" weight="bold" numberOfLines={1}>
+                    {dName}
+                  </AppText>
+                  <AppText role="tiny" color={colors.textMuted} numberOfLines={1}>
+                    {pickLang(isRTL, d.title ?? "", d.title_ar ?? "")} · {t("common.years", { n: d.experience_years })}
+                  </AppText>
+                </View>
+                {/* label, not price: the display size would squeeze out the doctor's title */}
+                <AppText role="label" weight="bold">
+                  {formatOMR(d.fee_omr, i18n)}
+                </AppText>
+              </Pressable>
+            );
+          })}
+        </View>
+      </Sheet>
     </Screen>
   );
 }
@@ -192,7 +276,7 @@ function toMin(hhmm: string): number {
   return h * 60 + m;
 }
 
-function ActionPill({ icon, label, onPress }: { icon: "phone" | "navigation"; label: string; onPress: () => void }) {
+function ActionPill({ icon, label, onPress }: { icon: "navigation"; label: string; onPress: () => void }) {
   const { colors, radii, row } = useTheme();
   return (
     <Pressable

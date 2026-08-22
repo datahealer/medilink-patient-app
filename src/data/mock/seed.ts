@@ -2,6 +2,7 @@ import type {
   Clinic,
   ClinicService,
   Doctor,
+  DoctorService,
   FamilyMember,
   HealthPackage,
   InsuranceCard,
@@ -23,7 +24,6 @@ const hash = (s: string): number => {
   for (let i = 0; i < s.length; i++) h = (h * 31 + s.charCodeAt(i)) | 0;
   return Math.abs(h);
 };
-const pick = <T,>(arr: readonly T[], seed: number): T => arr[seed % arr.length];
 const range = (seed: number, min: number, max: number) => min + (seed % (max - min + 1));
 
 /* ------------------------------------------------------------------ */
@@ -75,13 +75,16 @@ const NISBA: [string, string, string][] = [
   ["Al Jabri", "الجابري", "الجابرية"], ["Al Nabhani", "النبهاني", "النبهانية"],
 ];
 /** Expat doctors are common in Oman. [en, ar, gender] */
-const EXPATS: [string, string, "male" | "female"][] = [
-  ["Rajesh Kumar", "راجيش كومار", "male"],
-  ["Priya Menon", "برييا مينون", "female"],
-  ["Maria Santos", "ماريا سانتوس", "female"],
-  ["Ahmad Khan", "أحمد خان", "male"],
-  ["Nadia Hassan", "نادية حسن", "female"],
-  ["Thomas George", "توماس جورج", "male"],
+const EXPAT_FIRST: [string, string, "male" | "female"][] = [
+  ["Rajesh", "راجيش", "male"], ["Anil", "أنيل", "male"], ["Suresh", "سوريش", "male"],
+  ["Thomas", "توماس", "male"], ["Imran", "عمران", "male"],
+  ["Priya", "برييا", "female"], ["Maria", "ماريا", "female"], ["Nadia", "نادية", "female"],
+  ["Sunita", "سونيتا", "female"], ["Reena", "رينا", "female"],
+];
+const EXPAT_LAST: [string, string][] = [
+  ["Kumar", "كومار"], ["Menon", "مينون"], ["Santos", "سانتوس"], ["Khan", "خان"],
+  ["Hassan", "حسن"], ["George", "جورج"], ["Nair", "ناير"], ["Pillai", "بيلاي"],
+  ["Dsouza", "دسوزا"], ["Sharma", "شارما"],
 ];
 
 /** [area en, area ar, city en, city ar, lat, lng] */
@@ -127,8 +130,6 @@ const CLINIC_KIND: Record<Clinic["type"], { en: (s: string) => string; ar: (s: s
   optical: { en: (s) => `${s} Eye Center`, ar: (s) => `مركز ${s} للعيون` },
 };
 
-const INSURERS = ["Liva", "Dhofar Insurance", "Al Madina Takaful", "AXA Gulf", "NLGIC"];
-
 /** Gender-neutral (noun-phrase) bios per specialty + fee bands. */
 const ABOUT: Record<string, { en: string; ar: string; title: string; title_ar: string; title_ar_f: string; fee: [number, number] }> = {
   general: { en: "Everyday illness, chronic disease reviews and preventive care for all ages.", ar: "خبرة في الأمراض اليومية ومراجعات الأمراض المزمنة والرعاية الوقائية لجميع الأعمار.", title: "General Practitioner", title_ar: "طب عام", title_ar_f: "طب عام", fee: [4, 9] },
@@ -147,22 +148,44 @@ const ABOUT: Record<string, { en: string; ar: string; title: string; title_ar: s
   lab: { en: "Clinical pathology and laboratory medicine.", ar: "علم الأمراض السريري وطب المختبرات.", title: "Lab Medicine Specialist", title_ar: "أخصائي مختبرات", title_ar_f: "أخصائية مختبرات", fee: [3, 8] },
 };
 
-/** Service menus per clinic type (bilingual, base prices in OMR). */
-const SERVICE_MENU: Record<Clinic["type"], [string, string, number, string?][]> = {
+/**
+ * Service menus per clinic type (bilingual, base prices in OMR).
+ * Every line carries a specialty: an untagged service has no doctor to route
+ * "Book" to, which is how you end up booking a pediatric visit with a
+ * cardiologist. The doctor roster is generated FROM these menus (see
+ * rosterFor) so a facility can always staff what it advertises.
+ */
+const SERVICE_MENU: Record<Clinic["type"], [string, string, number, string][]> = {
   hospital: [
     ["General consultation", "استشارة عامة", 8, "general"],
-    ["Specialist consultation", "استشارة تخصصية", 20],
+    ["Pediatric consultation", "استشارة أطفال", 12, "pediatrics"],
+    ["Obstetrics & gynecology consultation", "استشارة نساء وولادة", 18, "obgyn"],
     ["ECG", "تخطيط القلب", 12, "cardiology"],
     ["Cardiac echo", "الموجات الصوتية للقلب", 35, "cardiology"],
+    ["Orthopedic consultation", "استشارة عظام", 20, "orthopedics"],
+    ["ENT consultation", "استشارة أنف وأذن وحنجرة", 14, "ent"],
+    ["Dermatology consultation", "استشارة جلدية", 16, "dermatology"],
+    ["Eye examination", "فحص العيون", 14, "ophthalmology"],
     ["X-Ray", "أشعة سينية", 10, "radiology"],
     ["MRI scan", "الرنين المغناطيسي", 90, "radiology"],
+    ["Laboratory tests", "الفحوصات المخبرية", 6, "lab"],
+    ["Physiotherapy session", "جلسة علاج طبيعي", 12, "physio"],
+    ["Psychology session", "جلسة استشارة نفسية", 22, "mental"],
   ],
   clinic: [
     ["General consultation", "استشارة عامة", 6, "general"],
-    ["Pediatric consultation", "استشارة أطفال", 12, "pediatrics"],
-    ["Vaccination", "التطعيمات", 5, "pediatrics"],
     ["Blood pressure & sugar check", "قياس الضغط والسكر", 3, "general"],
     ["Wound dressing", "ضماد الجروح", 4, "general"],
+    ["Pediatric consultation", "استشارة أطفال", 12, "pediatrics"],
+    ["Vaccination", "التطعيمات", 5, "pediatrics"],
+    ["Dermatology consultation", "استشارة جلدية", 15, "dermatology"],
+    ["ENT consultation", "استشارة أنف وأذن وحنجرة", 13, "ent"],
+    ["Women's health consultation", "استشارة صحة المرأة", 16, "obgyn"],
+    ["Nutrition consultation", "استشارة تغذية", 14, "nutrition"],
+    ["Psychology session", "جلسة استشارة نفسية", 20, "mental"],
+    ["Cardiology consultation", "استشارة قلب", 18, "cardiology"],
+    ["Orthopedic consultation", "استشارة عظام", 18, "orthopedics"],
+    ["X-Ray", "أشعة سينية", 9, "radiology"],
   ],
   dental: [
     ["Dental checkup", "كشف أسنان", 8, "dental"],
@@ -215,37 +238,52 @@ function distanceKm(lat: number, lng: number): number {
 /* ------------------------------------------------------------------ */
 /* Clinics — 8 crafted anchors + generated fleet (80 total)            */
 /* ------------------------------------------------------------------ */
-const svc = (id: string, name: string, name_ar: string, price: number, specialty?: string): ClinicService => ({
+const svc = (id: string, name: string, name_ar: string, price: number, specialty: string): ClinicService => ({
   id, name, name_ar, price_from_omr: price, specialty,
 });
 
-const ANCHOR_CLINICS: Clinic[] = [
+/** doctors_count and tag are derived once the roster exists — see CLINICS. */
+type ClinicSeed = Omit<Clinic, "doctors_count" | "tag">;
+
+/**
+ * The menu a facility actually prints. Hospitals and single-specialty
+ * facilities offer their whole type menu; a multi-specialty clinic keeps
+ * general medicine and picks up a deterministic subset of the rest — so
+ * "offers pediatrics" narrows the list instead of matching every clinic.
+ */
+function menuFor(type: Clinic["type"], h: (attr: string) => number) {
+  const pool = SERVICE_MENU[type];
+  if (type !== "clinic") return pool;
+  return pool.filter(([, , , specialty]) => specialty === "general" || h(`svc-${specialty}`) % 2 === 0);
+}
+
+const ANCHOR_CLINICS: ClinicSeed[] = [
   {
     id: "cl-muzn", name: "Al Muzn Specialist Hospital", name_ar: "مستشفى المُزن التخصصي", name_ar_status: "verified",
     type: "hospital", area: "Al Khuwair", area_ar: "الخوير", city: "Muscat", city_ar: "مسقط",
-    description: "A leading private hospital with 14 specialties, modern operating theatres and a 24/7 emergency department.",
-    description_ar: "مستشفى خاص رائد يضم 14 تخصصاً، وغرف عمليات حديثة، وقسم طوارئ يعمل على مدار الساعة.",
-    rating: 4.8, reviews: 512, doctors_count: 46, distance_km: 2.1, featured: true, is_verified: true,
+    description: "A leading private hospital with 12 specialties, modern operating theatres and a 24/7 emergency department.",
+    description_ar: "مستشفى خاص رائد يضم 12 تخصصاً، وغرف عمليات حديثة، وقسم طوارئ يعمل على مدار الساعة.",
+    rating: 4.8, reviews: 512, distance_km: 2.1, featured: true, is_verified: true,
     latitude: 23.5989, longitude: 58.4353, phone: "+968 2447 7000", working_hours: HOURS_247,
     services: SERVICE_MENU.hospital.map((s, i) => svc(`s-muzn-${i}`, s[0], s[1], s[2], s[3])),
-    accepted_insurances: ["Liva", "Dhofar Insurance", "Al Madina Takaful", "AXA Gulf"], coverHue: 262,
+    coverHue: 262,
   },
   {
     id: "cl-luban", name: "Luban Medical Complex", name_ar: "مجمع لُبان الطبي", name_ar_status: "verified",
     type: "clinic", area: "Ruwi", area_ar: "روي", city: "Muscat", city_ar: "مسقط",
     description: "Family-friendly multi-specialty complex serving Ruwi for over 20 years.",
     description_ar: "مجمع طبي متعدد التخصصات يخدم عائلات روي منذ أكثر من 20 عاماً.",
-    rating: 4.7, reviews: 389, doctors_count: 24, distance_km: 6.8, featured: true, is_verified: true,
+    rating: 4.7, reviews: 389, distance_km: 6.8, featured: true, is_verified: true,
     latitude: 23.5931, longitude: 58.5455, phone: "+968 2470 2211", working_hours: HOURS_STD,
     services: SERVICE_MENU.clinic.map((s, i) => svc(`s-luban-${i}`, s[0], s[1], s[2], s[3])),
-    accepted_insurances: ["Liva", "Dhofar Insurance"], coverHue: 220,
+    coverHue: 220,
   },
   {
     id: "cl-mouj", name: "Al Mouj Health Village", name_ar: "قرية الموج الصحية", name_ar_status: "verified",
     type: "clinic", area: "Al Mouj", area_ar: "الموج", city: "Muscat", city_ar: "مسقط",
     description: "Boutique wellness clinic by the marina — dermatology, mental health and nutrition.",
     description_ar: "عيادة راقية على المرسى — الجلدية والصحة النفسية والتغذية العلاجية.",
-    rating: 4.9, reviews: 167, doctors_count: 12, distance_km: 12.4, is_verified: true,
+    rating: 4.9, reviews: 167, distance_km: 12.4, is_verified: true,
     latitude: 23.6396, longitude: 58.2531, phone: "+968 2205 3300", working_hours: HOURS_STD,
     services: [
       svc("s-mouj-1", "Dermatology consultation", "استشارة جلدية", 18, "dermatology"),
@@ -253,63 +291,63 @@ const ANCHOR_CLINICS: Clinic[] = [
       svc("s-mouj-3", "Psychology session", "جلسة استشارة نفسية", 25, "mental"),
       svc("s-mouj-4", "Nutrition consultation", "استشارة تغذية", 15, "nutrition"),
     ],
-    accepted_insurances: ["AXA Gulf", "Liva"], coverHue: 288,
+    coverHue: 288,
   },
   {
     id: "cl-nakhal", name: "Nakhal Dental House", name_ar: "بيت نخل لطب الأسنان", name_ar_status: "verified",
     type: "dental", area: "Qurum", area_ar: "القرم", city: "Muscat", city_ar: "مسقط",
     description: "Dedicated dental house — cosmetic, orthodontic and family dentistry.",
     description_ar: "بيت متخصص للأسنان — تجميل وتقويم وطب أسنان العائلة.",
-    rating: 4.9, reviews: 294, doctors_count: 8, distance_km: 4.5, is_verified: true,
+    rating: 4.9, reviews: 294, distance_km: 4.5, is_verified: true,
     latitude: 23.6089, longitude: 58.4794, phone: "+968 2456 8800", working_hours: HOURS_STD,
     services: SERVICE_MENU.dental.map((s, i) => svc(`s-nakhal-${i}`, s[0], s[1], s[2], s[3])),
-    accepted_insurances: ["Al Madina Takaful", "Liva"], coverHue: 245,
+    coverHue: 245,
   },
   {
     id: "cl-diqqa", name: "Diqqa Medical Laboratories", name_ar: "مختبرات دِقّة الطبية", name_ar_status: "verified",
     type: "lab", area: "Bawshar", area_ar: "بوشر", city: "Muscat", city_ar: "مسقط",
     description: "Accredited labs with home sample collection across Muscat and results in hours.",
     description_ar: "مختبرات معتمدة مع خدمة السحب المنزلي في مسقط ونتائج خلال ساعات.",
-    rating: 4.8, reviews: 201, doctors_count: 6, distance_km: 5.2, is_verified: true,
+    rating: 4.8, reviews: 201, distance_km: 5.2, is_verified: true,
     latitude: 23.559, longitude: 58.399, phone: "+968 2459 1144", working_hours: HOURS_STD,
     services: SERVICE_MENU.lab.map((s, i) => svc(`s-diqqa-${i}`, s[0], s[1], s[2], s[3])),
-    accepted_insurances: ["Liva", "Dhofar Insurance", "AXA Gulf"], coverHue: 210,
+    coverHue: 210,
   },
   {
     id: "cl-physio", name: "Harakah Physiotherapy Center", name_ar: "مركز حَرَكة للعلاج الطبيعي", name_ar_status: "verified",
     type: "physiotherapy", area: "Al Ghubra", area_ar: "الغبرة", city: "Muscat", city_ar: "مسقط",
     description: "Rehabilitation, sports injuries and posture programs with modern equipment.",
     description_ar: "إعادة تأهيل وإصابات ملاعب وبرامج قوام بأحدث الأجهزة.",
-    rating: 4.7, reviews: 76, doctors_count: 5, distance_km: 3.3, is_verified: true,
+    rating: 4.7, reviews: 76, distance_km: 3.3, is_verified: true,
     latitude: 23.5859, longitude: 58.4059, phone: "+968 2449 6600", working_hours: HOURS_STD,
     services: SERVICE_MENU.physiotherapy.map((s, i) => svc(`s-physio-${i}`, s[0], s[1], s[2], s[3])),
-    accepted_insurances: ["Liva"], coverHue: 200,
+    coverHue: 200,
   },
   {
     id: "cl-qurum-eye", name: "Qurum Vision Eye Center", name_ar: "مركز القرم للعيون", name_ar_status: "verified",
     type: "optical", area: "Qurum", area_ar: "القرم", city: "Muscat", city_ar: "مسقط",
     description: "Comprehensive eye care — exams, retina imaging and LASIK consultations.",
     description_ar: "رعاية متكاملة للعيون — فحوصات وتصوير الشبكية واستشارات الليزك.",
-    rating: 4.6, reviews: 98, doctors_count: 4, distance_km: 4.9, is_verified: true,
+    rating: 4.6, reviews: 98, distance_km: 4.9, is_verified: true,
     latitude: 23.612, longitude: 58.475, phone: "+968 2456 2277", working_hours: HOURS_STD,
     services: SERVICE_MENU.optical.map((s, i) => svc(`s-eye-${i}`, s[0], s[1], s[2], s[3])),
-    accepted_insurances: ["Dhofar Insurance", "Liva"], coverHue: 230,
+    coverHue: 230,
   },
   {
     id: "cl-seeb", name: "Al Seeb Community Clinic", name_ar: "عيادة السيب الأهلية", name_ar_status: "verified",
     type: "clinic", area: "Seeb", area_ar: "السيب", city: "Muscat", city_ar: "مسقط",
     description: "Affordable everyday care for the Seeb community, walk-ins welcome.",
     description_ar: "رعاية يومية بأسعار مناسبة لأهالي السيب، ويُستقبل الحضور المباشر.",
-    rating: 4.5, reviews: 645, doctors_count: 9, distance_km: 18.6, is_verified: true,
+    rating: 4.5, reviews: 645, distance_km: 18.6, is_verified: true,
     latitude: 23.6702, longitude: 58.189, phone: "+968 2442 3355", working_hours: HOURS_STD,
     services: SERVICE_MENU.clinic.map((s, i) => svc(`s-seeb-${i}`, s[0], s[1], s[2], s[3])),
-    accepted_insurances: ["Liva", "Al Madina Takaful"], coverHue: 195,
+    coverHue: 195,
   },
 ];
 
 const CLINIC_TYPES: Clinic["type"][] = ["clinic", "clinic", "clinic", "dental", "dental", "hospital", "lab", "physiotherapy", "optical", "clinic"];
 
-function makeClinic(i: number): Clinic {
+function makeClinic(i: number): ClinicSeed {
   // Independent hash per attribute — adjacent bit-shifts of one hash are
   // correlated across similar keys and cluster the catalog badly.
   const h = (attr: string) => hash(`clinic-${i}-${attr}`);
@@ -319,7 +357,7 @@ function makeClinic(i: number): Clinic {
   const lat = lat0 + ((h("lat") % 19) - 9) / 950;
   const lng = lng0 + ((h("lng") % 19) - 9) / 950;
   const kind = CLINIC_KIND[type];
-  const menu = SERVICE_MENU[type];
+  const menu = menuFor(type, h);
   const jitter = 1 + ((h("jitter") % 5) - 2) / 20; // ±10% price variation
   return {
     id: `cl-g${i}`,
@@ -332,22 +370,23 @@ function makeClinic(i: number): Clinic {
     description_ar: `${type === "hospital" ? "مستشفى موثوق يخدم" : "جهة رعاية موثوقة تخدم"} أهالي ${areaAr}.`,
     rating: Math.round((4.1 + (h("rating") % 9) / 10) * 10) / 10,
     reviews: range(h("reviews"), 6, 480),
-    doctors_count: range(h("docs"), 3, 38),
     distance_km: distanceKm(lat, lng),
     is_verified: h("verified") % 5 !== 0,
     latitude: lat, longitude: lng,
     phone: `+968 2${range(h("ph1"), 400, 499)} ${range(h("ph2"), 1000, 9899)}`,
     working_hours: type === "hospital" ? HOURS_247 : HOURS_STD,
     services: menu.map((s, k) => svc(`s-g${i}-${k}`, s[0], s[1], Math.max(2, Math.round(s[2] * jitter)), s[3])),
-    accepted_insurances: INSURERS.filter((_, k) => h(`ins${k}`) % 2 === 0).slice(0, 3),
     coverHue: 190 + (h("hue") % 110),
   };
 }
 
-/** Deterministic promo tag — most items stay untagged on purpose. */
-function clinicTag(c: Clinic): Tag | null {
+/**
+ * Deterministic promo tag — most items stay untagged on purpose.
+ * `featured` is NOT a tag: featured clinics live in their own curated home
+ * section and must not blend into the promo-badge noise.
+ */
+function clinicTag(c: ClinicSeed): Tag | null {
   const seed = hash(c.id);
-  if (c.featured) return { key: "featured" };
   if (c.working_hours[0]?.open === "00:00") return seed % 2 === 0 ? { key: "open247" } : null;
   if (c.reviews < 20) return { key: "new" };
   if (c.distance_km <= 2.5 && seed % 3 === 0) return { key: "nearest" };
@@ -355,19 +394,17 @@ function clinicTag(c: Clinic): Tag | null {
   return null;
 }
 
-export const CLINICS: Clinic[] = [...ANCHOR_CLINICS, ...Array.from({ length: 72 }, (_, i) => makeClinic(i))].map(
-  (c) => ({ ...c, tag: clinicTag(c) }),
-);
+const CLINIC_SEEDS: ClinicSeed[] = [...ANCHOR_CLINICS, ...Array.from({ length: 72 }, (_, i) => makeClinic(i))];
 
 /* ------------------------------------------------------------------ */
-/* Doctors — 12 crafted anchors + generated fleet (120 total)          */
+/* Doctors — 12 crafted anchors + a roster generated per clinic         */
 /* ------------------------------------------------------------------ */
 const doc = (
   id: string, full_name: string, full_name_ar: string, specialty: string, clinicId: string,
   rating: number, reviews: number, fee: number, gender: "male" | "female", exp: number,
   languages: string[], about: string, about_ar: string, hue: number, title: string, title_ar: string,
 ): Doctor => {
-  const clinic = CLINICS.find((c) => c.id === clinicId)!;
+  const clinic = CLINIC_SEEDS.find((c) => c.id === clinicId)!;
   return {
     id, full_name, full_name_ar, full_name_ar_status: "verified", specialty, title, title_ar,
     facility_id: clinicId, facility: clinic.name, facility_ar: clinic.name_ar,
@@ -427,37 +464,55 @@ const ANCHOR_DOCTORS: Doctor[] = [
     258, "Specialist", "أخصائية"),
 ];
 
-/** Which specialties can practice at which clinic type. */
-const TYPE_SPECIALTIES: Record<Clinic["type"], string[]> = {
-  hospital: ["general", "cardiology", "pediatrics", "obgyn", "orthopedics", "ent", "radiology", "dermatology", "ophthalmology"],
-  clinic: ["general", "pediatrics", "obgyn", "dermatology", "ent", "nutrition", "mental", "cardiology", "orthopedics", "general"],
-  dental: ["dental"],
-  lab: ["lab"],
-  physiotherapy: ["physio"],
-  optical: ["ophthalmology"],
+/** Extra doctors doubling up on a specialty the facility already staffs. */
+const EXTRA_DOCTORS: Record<Clinic["type"], [number, number]> = {
+  hospital: [2, 6],
+  clinic: [0, 2],
+  dental: [1, 3],
+  lab: [1, 2],
+  physiotherapy: [1, 3],
+  optical: [1, 3],
 };
 
-function makeDoctor(i: number): Doctor {
-  const h = (attr: string) => hash(`doctor-${i}-${attr}`);
-  const clinic = CLINICS[h("clinic") % CLINICS.length];
-  const options = TYPE_SPECIALTIES[clinic.type];
-  const specialty = options[h("spec") % options.length];
+type Name = { en: string; ar: string; gender: "male" | "female" };
+
+/**
+ * Every name the pools can produce. Doctors claim one by index instead of
+ * re-rolling a hash: this hash correlates badly across near-identical keys, so
+ * re-rolling walked a handful of names and produced armies of namesakes.
+ */
+const OMANI_NAMES: Name[] = [
+  ...MALE.flatMap((f) => NISBA.map((n) => ({ en: `${f[0]} ${n[0]}`, ar: `${f[1]} ${n[1]}`, gender: "male" as const }))),
+  ...FEMALE.flatMap((f) => NISBA.map((n) => ({ en: `${f[0]} ${n[0]}`, ar: `${f[1]} ${n[2]}`, gender: "female" as const }))),
+];
+const EXPAT_NAMES: Name[] = EXPAT_FIRST.flatMap((f) =>
+  EXPAT_LAST.map((l) => ({ en: `${f[0]} ${l[0]}`, ar: `${f[1]} ${l[1]}`, gender: f[2] })),
+);
+
+/** Two doctors with the same full name read as a data bug, so names are unique. */
+const usedNames = new Set<string>(ANCHOR_DOCTORS.map((d) => d.full_name.replace(/^Dr\. /, "")));
+
+/** Claim the first free name at or after the hashed index. */
+function claimName(seed: number, isExpat: boolean): Name {
+  const pool = isExpat ? EXPAT_NAMES : OMANI_NAMES;
+  for (let i = 0; i < pool.length; i++) {
+    const candidate = pool[(seed + i) % pool.length];
+    if (!usedNames.has(candidate.en)) {
+      usedNames.add(candidate.en);
+      return candidate;
+    }
+  }
+  return pool[seed % pool.length]; // pool exhausted — 740 names vs ~450 doctors, so unreachable
+}
+
+function makeDoctor(clinic: ClinicSeed, specialty: string, k: number): Doctor {
+  const h = (attr: string) => hash(`doctor-${clinic.id}-${k}-${attr}`);
   const meta = ABOUT[specialty];
   const isExpat = h("expat") % 9 === 0;
-  let nameEn: string, nameAr: string, gender: "male" | "female";
-  if (isExpat) {
-    const e = EXPATS[h("ename") % EXPATS.length];
-    nameEn = e[0]; nameAr = e[1]; gender = e[2];
-  } else {
-    gender = h("gender") % 2 === 0 ? "male" : "female";
-    const first = pick(gender === "male" ? MALE : FEMALE, h("first"));
-    const nisba = pick(NISBA, h("nisba"));
-    nameEn = `${first[0]} ${nisba[0]}`;
-    nameAr = `${first[1]} ${gender === "male" ? nisba[1] : nisba[2]}`;
-  }
+  const { en: nameEn, ar: nameAr, gender } = claimName(h("name"), isExpat);
   const [feeLo, feeHi] = meta.fee;
   return {
-    id: `dr-g${i}`,
+    id: `dr-${clinic.id.replace(/^cl-/, "")}-${k}`,
     full_name: `Dr. ${nameEn}`,
     full_name_ar: `د. ${nameAr}`,
     full_name_ar_status: "verified",
@@ -490,9 +545,130 @@ function doctorTag(dr: Doctor): Tag | null {
   return null;
 }
 
-export const DOCTORS: Doctor[] = [...ANCHOR_DOCTORS, ...Array.from({ length: 108 }, (_, i) => makeDoctor(i))].map(
-  (dr) => ({ ...dr, tag: doctorTag(dr) }),
-);
+/* ------------------------------------------------------------------ */
+/* Doctor services beyond consultation (client feedback 2026-08-20):   */
+/* some doctors dress wounds or clean ears — consultation stays the    */
+/* headline, extras collapse behind "+n more" on the doctor screen.    */
+/* ------------------------------------------------------------------ */
+type SvcTemplate = [en: string, ar: string, priceOMR: number];
+
+const EXTRA_SERVICES: Record<string, SvcTemplate[]> = {
+  general: [
+    ["Wound dressing", "تضميد الجروح", 5],
+    ["Ear irrigation (wax removal)", "غسيل الأذن وإزالة الشمع", 7],
+    ["Travel & school vaccinations", "تطعيمات السفر والمدارس", 10],
+    ["IV vitamin drip", "مغذّي فيتامينات وريدي", 15],
+  ],
+  ent: [
+    ["Ear cleaning (microsuction)", "تنظيف الأذن بالشفط الدقيق", 12],
+    ["Nasal endoscopy", "منظار الأنف", 18],
+    ["Hearing test", "فحص السمع", 10],
+  ],
+  dental: [
+    ["Scaling & polishing", "تنظيف وتلميع الأسنان", 12],
+    ["Tooth filling", "حشو الأسنان", 15],
+    ["Tooth extraction", "خلع الأسنان", 18],
+    ["Teeth whitening", "تبييض الأسنان", 45],
+  ],
+  dermatology: [
+    ["Cryotherapy (wart removal)", "العلاج بالتبريد لإزالة الثآليل", 15],
+    ["Laser session", "جلسة ليزر", 25],
+    ["Chemical peel", "تقشير كيميائي", 22],
+  ],
+  cardiology: [
+    ["ECG", "تخطيط القلب", 8],
+    ["Echocardiogram", "تصوير صدى القلب", 25],
+    ["24h Holter monitor", "جهاز هولتر 24 ساعة", 30],
+  ],
+  obgyn: [
+    ["Ultrasound scan", "تصوير بالموجات فوق الصوتية", 15],
+    ["Pap smear", "مسحة عنق الرحم", 12],
+  ],
+  pediatrics: [
+    ["Vaccination visit", "زيارة تطعيم", 8],
+    ["Growth & nutrition check", "فحص النمو والتغذية", 10],
+  ],
+  orthopedics: [
+    ["Joint injection", "حقنة مفصل", 20],
+    ["Cast application", "تركيب جبيرة", 18],
+  ],
+  ophthalmology: [
+    ["Comprehensive vision test", "فحص نظر شامل", 10],
+    ["Retina imaging", "تصوير الشبكية", 20],
+  ],
+  physio: [
+    ["Therapy session", "جلسة علاج طبيعي", 12],
+    ["Dry needling session", "جلسة إبر جافة", 15],
+    ["Sports massage", "مساج رياضي", 14],
+  ],
+  mental: [["Therapy session (50 min)", "جلسة علاج نفسي (50 دقيقة)", 25]],
+  nutrition: [
+    ["Body composition analysis", "تحليل مكونات الجسم", 8],
+    ["Personalized diet plan", "خطة غذائية مخصصة", 12],
+  ],
+};
+
+/** Demo anchors keep curated menus — the client's own examples must show. */
+const ANCHOR_SERVICE_IDS: Record<string, number[]> = {
+  "dr-fatma": [0, 1, 2], // GP — wound dressing, ear irrigation, vaccinations
+  "dr-hanan": [0, 1, 2], // ENT — ear cleaning, endoscopy, hearing test
+  "dr-khalid": [0, 1, 3],
+  "dr-sara": [0, 1],
+  "dr-ahmed": [0, 1, 2],
+};
+
+function servicesFor(dr: Doctor): DoctorService[] | undefined {
+  const pool = EXTRA_SERVICES[dr.specialty];
+  if (!pool) return undefined;
+  const toService = (tpl: SvcTemplate, k: number, jitter = 0): DoctorService => ({
+    id: `${dr.id}-svc-${k}`,
+    name: tpl[0],
+    name_ar: tpl[1],
+    price_omr: Math.max(2, Math.round(tpl[2] * (1 + jitter))),
+  });
+  const curated = ANCHOR_SERVICE_IDS[dr.id];
+  if (curated) return curated.filter((i) => pool[i]).map((i, k) => toService(pool[i], k));
+  const h = (attr: string) => hash(`${dr.id}-svc-${attr}`);
+  // 0..pool.length, so a fair share of doctors stay consultation-only.
+  const n = h("count") % (pool.length + 1);
+  if (!n) return undefined;
+  const start = h("start") % pool.length;
+  return Array.from({ length: n }, (_, k) =>
+    toService(pool[(start + k) % pool.length], k, ((h(`p${k}`) % 5) - 2) / 20),
+  );
+}
+
+/**
+ * A facility's roster covers exactly the specialties its menu advertises —
+ * crafted anchors first, generated doctors filling the gaps. That invariant is
+ * what makes specialty search honest: a clinic can never surface for a service
+ * it has nobody to perform, and every "Book" button has a doctor to route to.
+ */
+function rosterFor(clinic: ClinicSeed): Doctor[] {
+  const h = (attr: string) => hash(`roster-${clinic.id}-${attr}`);
+  const advertised = [...new Set(clinic.services.map((s) => s.specialty).filter(Boolean) as string[])];
+  const anchored = new Set(ANCHOR_DOCTORS.filter((d) => d.facility_id === clinic.id).map((d) => d.specialty));
+  const roster = advertised.filter((sp) => !anchored.has(sp)).map((sp, k) => makeDoctor(clinic, sp, k));
+  const [lo, hi] = EXTRA_DOCTORS[clinic.type];
+  const extras = range(h("extras"), lo, hi);
+  for (let e = 0; e < extras; e++) {
+    roster.push(makeDoctor(clinic, advertised[h(`extra-${e}`) % advertised.length], 50 + e));
+  }
+  return roster;
+}
+
+export const DOCTORS: Doctor[] = [...ANCHOR_DOCTORS, ...CLINIC_SEEDS.flatMap((c) => rosterFor(c))].map((dr) => ({
+  ...dr,
+  tag: doctorTag(dr),
+  services: servicesFor(dr),
+}));
+
+/** doctors_count is the roster length — a badge that disagrees with the list is a bug. */
+export const CLINICS: Clinic[] = CLINIC_SEEDS.map((c) => ({
+  ...c,
+  doctors_count: DOCTORS.filter((d) => d.facility_id === c.id).length,
+  tag: clinicTag(c),
+}));
 
 /* ------------------------------------------------------------------ */
 /* Health packages — 30, from bilingual templates                      */
@@ -500,55 +676,57 @@ export const DOCTORS: Doctor[] = [...ANCHOR_DOCTORS, ...Array.from({ length: 108
 type Inc = { en: string; ar: string };
 const INC = (en: string, ar: string): Inc => ({ en, ar });
 
-const PACKAGE_TEMPLATES: { en: string; ar: string; base: number; tests: number; hours: number; includes: Inc[] }[] = [
+const PACKAGE_TEMPLATES: { en: string; ar: string; base: number; tests: number; hours: number; specialty: string; includes: Inc[] }[] = [
   {
-    en: "Comprehensive Health Check", ar: "فحص الصحة الشامل", base: 45, tests: 34, hours: 24,
+    en: "Comprehensive Health Check", ar: "فحص الصحة الشامل", base: 45, tests: 34, hours: 24, specialty: "general",
     includes: [INC("Complete blood count", "تعداد الدم الكامل"), INC("Lipid profile", "مستوى الدهون والكوليسترول"), INC("Liver & kidney function", "وظائف الكبد والكلى"), INC("Vitamin D & B12", "فيتامين د و ب12"), INC("Thyroid (TSH)", "الغدة الدرقية"), INC("HbA1c (diabetes)", "السكر التراكمي"), INC("ECG", "تخطيط القلب"), INC("Doctor review of results", "مراجعة الطبيب للنتائج")],
   },
   {
-    en: "Women's Wellness Package", ar: "باقة صحة المرأة", base: 38, tests: 22, hours: 48,
+    en: "Women's Wellness Package", ar: "باقة صحة المرأة", base: 38, tests: 22, hours: 48, specialty: "obgyn",
     includes: [INC("Hormone panel", "فحص الهرمونات"), INC("Iron & ferritin", "الحديد ومخازنه"), INC("Pap smear", "مسحة عنق الرحم"), INC("Breast ultrasound", "تصوير الثدي بالموجات"), INC("Bone density scan", "فحص كثافة العظام"), INC("Gynecology consultation", "استشارة نساء وولادة")],
   },
   {
-    en: "Healthy Heart Package", ar: "باقة القلب السليم", base: 29.5, tests: 12, hours: 24,
+    en: "Healthy Heart Package", ar: "باقة القلب السليم", base: 29.5, tests: 12, hours: 24, specialty: "cardiology",
     includes: [INC("ECG", "تخطيط القلب"), INC("Cardiac echo", "الموجات الصوتية للقلب"), INC("Lipid profile", "مستوى الدهون"), INC("Blood pressure monitoring", "متابعة ضغط الدم"), INC("Cardiologist consultation", "استشارة طبيب قلب")],
   },
   {
-    en: "Pre-Marital Screening", ar: "فحص ما قبل الزواج", base: 25, tests: 14, hours: 48,
+    en: "Pre-Marital Screening", ar: "فحص ما قبل الزواج", base: 25, tests: 14, hours: 48, specialty: "lab",
     includes: [INC("Blood group & compatibility", "فصيلة الدم والتوافق"), INC("Genetic blood disorders", "أمراض الدم الوراثية"), INC("Infectious screening", "الفحوصات المعدية"), INC("Consultation & certificate", "استشارة وإصدار الشهادة")],
   },
   {
-    en: "Diabetes Care Package", ar: "باقة رعاية السكري", base: 22, tests: 10, hours: 24,
+    en: "Diabetes Care Package", ar: "باقة رعاية السكري", base: 22, tests: 10, hours: 24, specialty: "nutrition",
     includes: [INC("HbA1c", "السكر التراكمي"), INC("Fasting glucose", "سكر صائم"), INC("Kidney function", "وظائف الكلى"), INC("Foot examination", "فحص القدم"), INC("Dietitian consultation", "استشارة تغذية")],
   },
   {
-    en: "Child Wellness Package", ar: "باقة صحة الطفل", base: 18, tests: 9, hours: 24,
+    en: "Child Wellness Package", ar: "باقة صحة الطفل", base: 18, tests: 9, hours: 24, specialty: "pediatrics",
     includes: [INC("Growth assessment", "تقييم النمو"), INC("CBC & iron", "تعداد الدم والحديد"), INC("Vitamin D", "فيتامين د"), INC("Pediatric consultation", "استشارة طبيب أطفال")],
   },
   {
-    en: "Men's Health Package", ar: "باقة صحة الرجل", base: 32, tests: 18, hours: 24,
+    en: "Men's Health Package", ar: "باقة صحة الرجل", base: 32, tests: 18, hours: 24, specialty: "general",
     includes: [INC("Hormone panel", "فحص الهرمونات"), INC("PSA screening", "فحص البروستاتا"), INC("Lipid & liver profile", "الدهون ووظائف الكبد"), INC("ECG", "تخطيط القلب"), INC("Doctor consultation", "استشارة طبيب")],
   },
   {
-    en: "Dental Care Package", ar: "باقة العناية بالأسنان", base: 20, tests: 4, hours: 2,
+    en: "Dental Care Package", ar: "باقة العناية بالأسنان", base: 20, tests: 4, hours: 2, specialty: "dental",
     includes: [INC("Checkup & X-ray", "كشف وأشعة"), INC("Deep cleaning", "تنظيف عميق"), INC("Polishing", "تلميع"), INC("Fluoride treatment", "علاج الفلورايد")],
   },
   {
-    en: "Skin Glow Package", ar: "باقة نضارة البشرة", base: 35, tests: 3, hours: 2,
+    en: "Skin Glow Package", ar: "باقة نضارة البشرة", base: 35, tests: 3, hours: 2, specialty: "dermatology",
     includes: [INC("Skin analysis", "تحليل البشرة"), INC("Deep-clean facial", "تنظيف عميق للبشرة"), INC("Hydration session", "جلسة ترطيب"), INC("Dermatologist consultation", "استشارة جلدية")],
   },
   {
-    en: "Back & Posture Program", ar: "برنامج الظهر والقوام", base: 40, tests: 6, hours: 2,
+    en: "Back & Posture Program", ar: "برنامج الظهر والقوام", base: 40, tests: 6, hours: 2, specialty: "physio",
     includes: [INC("Physio assessment", "تقييم علاج طبيعي"), INC("4 therapy sessions", "4 جلسات علاجية"), INC("Posture plan", "خطة تصحيح القوام"), INC("Home exercise guide", "دليل تمارين منزلية")],
   },
 ];
 
 function makePackages(): HealthPackage[] {
-  const eligible = CLINICS.filter((c) => c.type === "hospital" || c.type === "clinic" || c.type === "lab" || c.type === "dental");
   const out: HealthPackage[] = [];
   for (let i = 0; i < 30; i++) {
     const h = (attr: string) => hash(`pkg-${i}-${attr}`);
     const tpl = PACKAGE_TEMPLATES[i % PACKAGE_TEMPLATES.length];
+    // Only offer a package where somebody can actually perform it — a dental
+    // package at a laboratory is the same wrong-doctor trap as an untagged service.
+    const eligible = CLINICS.filter((c) => DOCTORS.some((d) => d.facility_id === c.id && d.specialty === tpl.specialty));
     const clinic = eligible[h("clinic") % eligible.length];
     const tier = 0.85 + (h("tier") % 5) / 10; // 0.85–1.25 price tier
     const price = Math.round(tpl.base * tier * 2) / 2;
@@ -558,6 +736,7 @@ function makePackages(): HealthPackage[] {
       name: tpl.en,
       name_ar: tpl.ar,
       clinic_id: clinic.id,
+      specialty: tpl.specialty,
       price_omr: price,
       old_price_omr: hasDiscount ? Math.round(price * (1.2 + (h("disc2") % 3) / 10) * 2) / 2 : undefined,
       tests_count: tpl.tests,
@@ -625,6 +804,48 @@ export const MEDICAL_HISTORY: MedicalHistory = {
   smoking_status: "never",
 };
 
+const EMPTY_HISTORY: MedicalHistory = {
+  allergies: [],
+  conditions: [],
+  medications: [],
+  surgeries: [],
+  smoking_status: "never",
+};
+
+/**
+ * Records are per person — switching profiles must show that person's file,
+ * not the account holder's. Members added in-session start with an empty file.
+ */
+export const HISTORY_BY_PERSON: Record<string, MedicalHistory> = {
+  self: MEDICAL_HISTORY,
+  "fam-salim": {
+    allergies: [],
+    conditions: [{ en: "Lower back strain (recurring)", ar: "إجهاد أسفل الظهر (متكرر)" }],
+    medications: [],
+    surgeries: [{ en: "Knee arthroscopy (2021)", ar: "تنظير الرُكبة (2021)" }],
+    smoking_status: "former",
+  },
+  "fam-lina": {
+    allergies: [{ en: "Peanuts", ar: "الفول السوداني" }],
+    conditions: [],
+    medications: [],
+    surgeries: [],
+    smoking_status: "never",
+  },
+  "fam-mariam": {
+    allergies: [{ en: "Sulfa drugs", ar: "أدوية السلفا" }],
+    conditions: [
+      { en: "Type 2 diabetes", ar: "السكري من النوع الثاني" },
+      { en: "Hypertension", ar: "ارتفاع ضغط الدم" },
+    ],
+    medications: ["Metformin 850mg", "Amlodipine 5mg"],
+    surgeries: [{ en: "Cataract surgery — right eye (2023)", ar: "عملية الساد — العين اليمنى (2023)" }],
+    smoking_status: "never",
+  },
+};
+
+export const NO_HISTORY = EMPTY_HISTORY;
+
 /* ------------------------------------------------------------------ */
 /* Appointments (dates computed relative to today)                     */
 /* ------------------------------------------------------------------ */
@@ -632,22 +853,48 @@ export const APPOINTMENTS_SEED = [
   {
     id: "apt-1", reference_number: "ML-4A7K92", doctor_id: "dr-ahmed", slot_date: d(2), slot_start: "10:30",
     status: "confirmed" as const, payment_status: "paid" as const, reason_for_visit: "متابعة ضغط الدم",
-    fee_omr: 25, patient_name: "Aisha Al Harthy", patient_name_ar: "عائشة الحارثية", clinic_id: "cl-muzn",
+    fee_omr: 25, patient_id: "self", patient_name: "Aisha Al Harthy", patient_name_ar: "عائشة الحارثية", clinic_id: "cl-muzn",
   },
   {
     id: "apt-2", reference_number: "ML-8Q2M41", doctor_id: "dr-khalid", slot_date: d(6), slot_start: "17:00",
     status: "pending" as const, payment_status: "unpaid" as const, reason_for_visit: "تنظيف الأسنان",
-    fee_omr: 15, patient_name: "Aisha Al Harthy", patient_name_ar: "عائشة الحارثية", clinic_id: "cl-nakhal",
+    fee_omr: 15, patient_id: "self", patient_name: "Aisha Al Harthy", patient_name_ar: "عائشة الحارثية", clinic_id: "cl-nakhal",
   },
   {
     id: "apt-3", reference_number: "ML-2C9F17", doctor_id: "dr-noura", slot_date: d(-12), slot_start: "16:30",
     status: "completed" as const, payment_status: "paid" as const, reason_for_visit: "حرارة وتعب عام",
-    fee_omr: 12, patient_name: "Lina Al Harthy", patient_name_ar: "لينا الحارثية", clinic_id: "cl-luban",
+    fee_omr: 12, patient_id: "fam-lina", patient_name: "Lina Al Harthy", patient_name_ar: "لينا الحارثية", clinic_id: "cl-luban",
   },
   {
     id: "apt-4", reference_number: "ML-7T1B08", doctor_id: "dr-fatma", slot_date: d(-60), slot_start: "09:00",
     status: "completed" as const, payment_status: "paid" as const, reason_for_visit: "مراجعة الربو",
-    fee_omr: 8, patient_name: "Aisha Al Harthy", patient_name_ar: "عائشة الحارثية", clinic_id: "cl-luban",
+    fee_omr: 8, patient_id: "self", patient_name: "Aisha Al Harthy", patient_name_ar: "عائشة الحارثية", clinic_id: "cl-luban",
+  },
+  /* Family visits — so switching profiles shows a real file, not an empty one. */
+  {
+    id: "apt-5", reference_number: "ML-9K3D55", doctor_id: "dr-said", slot_date: d(4), slot_start: "18:30",
+    status: "confirmed" as const, payment_status: "paid" as const, reason_for_visit: "ألم أسفل الظهر",
+    fee_omr: 22, patient_id: "fam-salim", patient_name: "Salim Al Harthy", patient_name_ar: "سالم الحارثي", clinic_id: "cl-muzn",
+  },
+  {
+    id: "apt-6", reference_number: "ML-5R8N23", doctor_id: "dr-omar", slot_date: d(-9), slot_start: "17:30",
+    status: "completed" as const, payment_status: "paid" as const, reason_for_visit: "جلسة علاج طبيعي",
+    fee_omr: 10, patient_id: "fam-salim", patient_name: "Salim Al Harthy", patient_name_ar: "سالم الحارثي", clinic_id: "cl-physio",
+  },
+  {
+    id: "apt-7", reference_number: "ML-3W6H81", doctor_id: "dr-ahmed", slot_date: d(1), slot_start: "11:00",
+    status: "confirmed" as const, payment_status: "paid" as const, reason_for_visit: "مراجعة ضغط الدم والسكري",
+    fee_omr: 25, patient_id: "fam-mariam", patient_name: "Mariam Al Wahaibi", patient_name_ar: "مريم الوهيبية", clinic_id: "cl-muzn",
+  },
+  {
+    id: "apt-8", reference_number: "ML-6Y4L37", doctor_id: "dr-rashid", slot_date: d(-40), slot_start: "09:30",
+    status: "completed" as const, payment_status: "paid" as const, reason_for_visit: "متابعة بعد عملية الساد",
+    fee_omr: 16, patient_id: "fam-mariam", patient_name: "Mariam Al Wahaibi", patient_name_ar: "مريم الوهيبية", clinic_id: "cl-qurum-eye",
+  },
+  {
+    id: "apt-9", reference_number: "ML-1J7V64", doctor_id: "dr-noura", slot_date: d(8), slot_start: "16:30",
+    status: "confirmed" as const, payment_status: "paid" as const, reason_for_visit: "تطعيم دوري",
+    fee_omr: 12, patient_id: "fam-lina", patient_name: "Lina Al Harthy", patient_name_ar: "لينا الحارثية", clinic_id: "cl-luban",
   },
 ];
 

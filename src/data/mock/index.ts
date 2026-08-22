@@ -2,23 +2,33 @@ import type {
   AiSuggestion,
   Appointment,
   AvailableSlot,
+  Clinic,
   Doctor,
   DoctorReviews,
   FamilyMember,
   Favourite,
+  HealthPackage,
   NewAppointment,
   NotificationItem,
   PatientProfile,
+  Person,
   Review,
 } from "../types";
-import type { DoctorSearchParams, Repositories } from "../repositories";
+import { CLINIC_TYPES } from "../types";
+import type {
+  ClinicSearchParams,
+  DoctorSearchParams,
+  PackageSearchParams,
+  Repositories,
+} from "../repositories";
 import {
   APPOINTMENTS_SEED,
   CLINICS,
   DOCTORS,
   FAMILY,
+  HISTORY_BY_PERSON,
   INSURANCE,
-  MEDICAL_HISTORY,
+  NO_HISTORY,
   NOTIFICATIONS,
   PACKAGES,
   PROFILE,
@@ -92,6 +102,44 @@ function withAvailability(doctor: Doctor): Doctor {
   };
 }
 
+/* --------------------------- People (profiles) --------------------------- */
+const HUES = [275, 205, 320, 245, 190, 300];
+
+function personFromMember(m: FamilyMember, i: number): Person {
+  return {
+    id: m.id,
+    full_name: m.full_name,
+    full_name_ar: m.full_name_ar,
+    gender: m.gender,
+    date_of_birth: m.date_of_birth,
+    relation: m.relation,
+    avatarHue: HUES[(i + 1) % HUES.length],
+    is_account_holder: false,
+  };
+}
+
+function people(): Person[] {
+  const self: Person = {
+    id: "self",
+    full_name: profile.full_name,
+    full_name_ar: profile.full_name_ar,
+    gender: profile.gender,
+    date_of_birth: profile.date_of_birth,
+    relation: "self",
+    avatarHue: profile.avatarHue,
+    blood_group: profile.blood_group,
+    is_account_holder: true,
+  };
+  return [self, ...family.map(personFromMember)];
+}
+
+/* ------------------------- Clinic ⇄ specialty link ----------------------- */
+/** A clinic "offers" a specialty when its doctors or its service menu do. */
+function clinicOffers(clinic: Clinic, specialty: string): boolean {
+  if (clinic.services.some((s) => s.specialty === specialty)) return true;
+  return DOCTORS.some((d) => d.facility_id === clinic.id && d.specialty === specialty);
+}
+
 function makeReviews(doctorId: string): DoctorReviews {
   const doctor = DOCTORS.find((x) => x.id === doctorId);
   const total = doctor?.reviews ?? 0;
@@ -128,8 +176,25 @@ export const repositories: Repositories = {
       profile = { ...profile, ...patch };
       return delay({ ...profile }, 500);
     },
-    getMedicalHistory: () => delay(MEDICAL_HISTORY),
-    getInsurance: () => delay(INSURANCE),
+    listPeople: () => delay(people(), 150),
+    getPerson: (patientId) => delay(people().find((p) => p.id === patientId) ?? null, 120),
+    getMedicalHistory: (patientId = "self") =>
+      // Members added during the session have no file yet — that's a designed
+      // empty state, not missing data.
+      delay(HISTORY_BY_PERSON[patientId] ?? NO_HISTORY),
+    getInsurance: (patientId = "self") => {
+      if (patientId === "self") return delay(INSURANCE);
+      const member = family.find((f) => f.id === patientId);
+      // Members are dependents on the account holder's policy.
+      return delay({
+        ...INSURANCE,
+        member_id: `${INSURANCE.member_id}-${(family.findIndex((f) => f.id === patientId) + 1)
+          .toString()
+          .padStart(2, "0")}`,
+        coverage: member ? `${INSURANCE.coverage} — dependent` : INSURANCE.coverage,
+        coverage_ar: member ? `${INSURANCE.coverage_ar} — تابع` : INSURANCE.coverage_ar,
+      });
+    },
   },
   family: {
     list: () => delay([...family]),
@@ -146,28 +211,71 @@ export const repositories: Repositories = {
   discovery: {
     listSpecialties: () => delay(SPECIALTIES, 180),
     featuredClinics: () => delay(CLINICS.filter((c) => c.featured)),
-    searchClinics: (term) => {
-      const q = term.trim().toLowerCase();
-      const all = q
-        ? CLINICS.filter(
-            (c) =>
-              c.name.toLowerCase().includes(q) ||
-              c.name_ar.includes(term.trim()) ||
-              c.area.toLowerCase().includes(q) ||
-              c.area_ar.includes(term.trim()) ||
-              c.city.toLowerCase().includes(q) ||
-              c.city_ar.includes(term.trim()),
-          )
-        : CLINICS;
-      return delay([...all].sort((a, b) => a.distance_km - b.distance_km));
+    searchClinics: (input) => {
+      const params: ClinicSearchParams = typeof input === "string" ? { query: input } : (input ?? {});
+      const raw = (params.query ?? "").trim();
+      const q = raw.toLowerCase();
+      let list: Clinic[] = CLINICS;
+      if (q) {
+        list = list.filter(
+          (c) =>
+            c.name.toLowerCase().includes(q) ||
+            c.name_ar.includes(raw) ||
+            c.area.toLowerCase().includes(q) ||
+            c.area_ar.includes(raw) ||
+            c.city.toLowerCase().includes(q) ||
+            c.city_ar.includes(raw) ||
+            c.services.some((s) => s.name.toLowerCase().includes(q) || s.name_ar.includes(raw)),
+        );
+      }
+      if (params.specialty) list = list.filter((c) => clinicOffers(c, params.specialty!));
+      if (params.type) list = list.filter((c) => c.type === params.type);
+      if (params.maxDistanceKm) list = list.filter((c) => c.distance_km <= params.maxDistanceKm!);
+      if (params.minRating) list = list.filter((c) => c.rating >= params.minRating!);
+      if (params.openNow) list = list.filter((c) => c.working_hours.some((w) => w.dow.includes(new Date().getDay()) && w.open));
+      return delay([...list].sort((a, b) => a.distance_km - b.distance_km));
     },
+    clinicTypes: (specialty) =>
+      delay(
+        CLINIC_TYPES.filter((ty) =>
+          CLINICS.some((c) => c.type === ty && (!specialty || clinicOffers(c, specialty))),
+        ),
+        140,
+      ),
     getClinic: (id) => delay(CLINICS.find((c) => c.id === id) ?? null),
-    searchPackages: (term) => {
-      const q = term.trim().toLowerCase();
-      const all = q
-        ? PACKAGES.filter((p) => p.name.toLowerCase().includes(q) || p.name_ar.includes(term.trim()))
-        : PACKAGES;
-      return delay(all);
+    searchPackages: (input) => {
+      const params: PackageSearchParams = typeof input === "string" ? { query: input } : (input ?? {});
+      const raw = (params.query ?? "").trim();
+      const q = raw.toLowerCase();
+      let list: HealthPackage[] = PACKAGES;
+      if (q) {
+        list = list.filter(
+          (p) =>
+            p.name.toLowerCase().includes(q) ||
+            p.name_ar.includes(raw) ||
+            p.includes.some((it) => it.en.toLowerCase().includes(q) || it.ar.includes(raw)),
+        );
+      }
+      if (params.clinicId) list = list.filter((p) => p.clinic_id === params.clinicId);
+      if (params.maxPrice) list = list.filter((p) => p.price_omr <= params.maxPrice!);
+      if (params.minTests) list = list.filter((p) => p.tests_count >= params.minTests!);
+      if (params.discountedOnly) list = list.filter((p) => !!p.old_price_omr);
+      const sorted = [...list];
+      switch (params.sort) {
+        case "priceAsc":
+          sorted.sort((a, b) => a.price_omr - b.price_omr);
+          break;
+        case "priceDesc":
+          sorted.sort((a, b) => b.price_omr - a.price_omr);
+          break;
+        case "tests":
+          sorted.sort((a, b) => b.tests_count - a.tests_count);
+          break;
+        case "popular":
+          sorted.sort((a, b) => Number(!!b.popular) - Number(!!a.popular));
+          break;
+      }
+      return delay(sorted);
     },
     getPackage: (id) => delay(PACKAGES.find((p) => p.id === id) ?? null),
   },
@@ -206,12 +314,13 @@ export const repositories: Repositories = {
     reviews: (id) => delay(makeReviews(id)),
   },
   appointment: {
-    list: (tab) => {
+    list: (tab, patientId) => {
       const today = todayISO();
-      const upcoming = appointments
+      const mine = patientId ? appointments.filter((a) => a.patient_id === patientId) : appointments;
+      const upcoming = mine
         .filter((a) => ["pending", "confirmed", "checked_in"].includes(a.status) && a.slot_date >= today)
         .sort((a, b) => (a.slot_date + a.slot_start).localeCompare(b.slot_date + b.slot_start));
-      const past = appointments
+      const past = mine
         .filter((a) => ["completed", "cancelled", "no_show"].includes(a.status) || a.slot_date < today)
         .sort((a, b) => (b.slot_date + b.slot_start).localeCompare(a.slot_date + a.slot_start));
       return delay(tab === "upcoming" ? upcoming : past);
@@ -233,6 +342,7 @@ export const repositories: Repositories = {
         payment_status: "paid",
         reason_for_visit: input.reason ?? null,
         fee_omr: doctor.fee_omr,
+        patient_id: input.patientId,
         patient_name: member?.full_name ?? profile.full_name,
         patient_name_ar: member?.full_name_ar ?? profile.full_name_ar,
         clinic_id: input.clinicId,

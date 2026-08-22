@@ -6,8 +6,9 @@ import { useI18n } from "@/i18n";
 import { repositories } from "@/data";
 import { useQueryish } from "@/data/hooks";
 import type { BloodGroup, Gender } from "@/data/types";
-import { fontFamilyFor } from "@/theme/typography";
-import { AppHeader, AppText, Card, CtaButton, Icon, Screen, SegmentedTabs } from "@/components/ui";
+import { figuresFor, fontFamilyFor, inputFontSize } from "@/theme/typography";
+import { ltr } from "@/utils/format";
+import { AppHeader, AppText, Card, CtaButton, DateField, Icon, Screen, SegmentedTabs } from "@/components/ui";
 
 const BLOOD_GROUPS: BloodGroup[] = ["A+", "A-", "B+", "B-", "AB+", "AB-", "O+", "O-"];
 
@@ -20,7 +21,7 @@ export default function EditProfile() {
   const [nameAr, setNameAr] = useState("");
   const [nameEn, setNameEn] = useState("");
   const [email, setEmail] = useState("");
-  const [dob, setDob] = useState("");
+  const [dob, setDob] = useState<string | null>(null);
   const [gender, setGender] = useState<Gender>("female");
   const [blood, setBlood] = useState<BloodGroup>("unknown");
   const [emergency, setEmergency] = useState("");
@@ -39,8 +40,7 @@ export default function EditProfile() {
     setEmergency(p.emergency_contact);
   }, [profile.data]);
 
-  const validDob = /^\d{4}-\d{2}-\d{2}$/.test(dob) && !Number.isNaN(Date.parse(dob)) && Date.parse(dob) < Date.now();
-  const canSave = nameAr.trim().length > 1 && nameEn.trim().length > 1 && email.includes("@") && validDob;
+  const canSave = nameAr.trim().length > 1 && nameEn.trim().length > 1 && email.includes("@") && !!dob;
 
   const save = async () => {
     setBusy(true);
@@ -48,7 +48,7 @@ export default function EditProfile() {
       full_name_ar: nameAr.trim(),
       full_name: nameEn.trim(),
       email: email.trim(),
-      date_of_birth: dob,
+      date_of_birth: dob!,
       gender,
       blood_group: blood,
       emergency_contact: emergency.trim(),
@@ -66,7 +66,8 @@ export default function EditProfile() {
     backgroundColor: colors.inputBackground,
     paddingHorizontal: 14,
     fontFamily: fontFamilyFor("body", "medium", isRTL),
-    fontSize: 14.5,
+    ...figuresFor(isRTL),
+    fontSize: inputFontSize(14.5, isRTL),
     color: colors.text,
     textAlign: (isRTL ? "right" : "left") as "right" | "left",
   };
@@ -125,7 +126,7 @@ export default function EditProfile() {
         {field({ label: t("records.nameAr"), value: nameAr, onChange: setNameAr })}
         {field({ label: t("records.nameEn"), value: nameEn, onChange: setNameEn, ltr: true })}
         {field({ label: t("profile.emailLabel"), value: email, onChange: setEmail, keyboard: "email-address", ltr: true })}
-        {field({ label: t("records.dob"), value: dob, onChange: setDob, keyboard: "numbers-and-punctuation", ltr: true, placeholder: "1994-03-12" })}
+        <DateField label={t("records.dob")} value={dob} onChange={setDob} />
 
         <View style={{ gap: 7 }}>
           <AppText role="label" color={colors.textMuted}>
@@ -167,7 +168,7 @@ export default function EditProfile() {
                   }}
                 >
                   <AppText role="label" weight="bold" color={active ? colors.textOnPrimary : colors.text}>
-                    {"⁦" + bg + "⁩"}
+                    {ltr(bg)}
                   </AppText>
                 </Pressable>
               );

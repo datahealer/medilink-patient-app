@@ -1,6 +1,6 @@
 import React, { useEffect, useRef, useState } from "react";
 import { Image, Pressable, TextInput, View } from "react-native";
-import { router } from "expo-router";
+import { router, useLocalSearchParams } from "expo-router";
 import { LinearGradient } from "expo-linear-gradient";
 import { useTheme } from "@/theme";
 import { useI18n } from "@/i18n";
@@ -9,6 +9,8 @@ import { fontFamilyFor } from "@/theme/typography";
 import { AppHeader, AppText, CtaButton, Icon, Orbs, Screen } from "@/components/ui";
 
 export default function SignIn() {
+  // `next` comes from the sign-in wall — resume whatever the guest was doing.
+  const { next } = useLocalSearchParams<{ next?: string }>();
   const { colors, spacing, radii, isRTL, row } = useTheme();
   const { t } = useI18n();
   const signIn = useAppStore((s) => s.signIn);
@@ -33,7 +35,7 @@ export default function SignIn() {
     setBusy(true);
     setTimeout(() => {
       signIn();
-      router.replace("/(tabs)");
+      router.replace(next ? (decodeURIComponent(next) as never) : "/(tabs)");
     }, 500);
   };
 
