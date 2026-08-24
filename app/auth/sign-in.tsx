@@ -4,6 +4,7 @@ import { router, useLocalSearchParams } from "expo-router";
 import { LinearGradient } from "expo-linear-gradient";
 import { useTheme } from "@/theme";
 import { useI18n } from "@/i18n";
+import { authBridge } from "@/data";
 import { useAppStore } from "@/stores/appStore";
 import { fontFamilyFor } from "@/theme/typography";
 import { AppHeader, AppText, CtaButton, Icon, Orbs, Screen } from "@/components/ui";
@@ -31,12 +32,21 @@ export default function SignIn() {
     }
   }, [stage]);
 
-  const complete = () => {
+  const [error, setError] = useState<string | null>(null);
+
+  const complete = async () => {
     setBusy(true);
-    setTimeout(() => {
+    setError(null);
+    try {
+      // Mock: theater. Real: a live Supabase session (demo account behind the
+      // OTP sheet — see src/data/real/auth.ts).
+      await authBridge.demoSignIn(phone);
       signIn();
       router.replace(next ? (decodeURIComponent(next) as never) : "/(tabs)");
-    }, 500);
+    } catch (e) {
+      setBusy(false);
+      setError(e instanceof Error ? e.message : String(e));
+    }
   };
 
   return (
@@ -138,7 +148,12 @@ export default function SignIn() {
                 </View>
               ))}
             </View>
-            <CtaButton label={t("auth.verify")} loading={busy} disabled={!otp[3]} onPress={complete} />
+            {error ? (
+              <AppText role="caption" color={colors.error} align="center" style={{ marginBottom: 8 }}>
+                {error}
+              </AppText>
+            ) : null}
+            <CtaButton label={t("auth.verify")} loading={busy} disabled={!otp[3]} onPress={() => void complete()} />
             <Pressable onPress={() => setOtp(["1", "2", "3", "4"])} style={{ alignItems: "center", padding: 10 }} accessibilityRole="button">
               <AppText role="label" color={colors.primaryMuted}>
                 {t("auth.resend")}

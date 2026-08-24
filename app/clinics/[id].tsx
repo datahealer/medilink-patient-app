@@ -128,7 +128,8 @@ export default function ClinicDetail() {
         <View style={{ flexDirection: row, alignItems: "center", gap: 3 }}>
           <Icon name="map-pin" size={13} color={colors.textFaint} />
           <AppText role="caption" color={colors.textMuted}>
-            {pickLang(isRTL, `${c.area}, ${c.city}`, `${c.area_ar}، ${c.city_ar}`)} · {t("common.km", { n: c.distance_km })}
+            {pickLang(isRTL, `${c.area}, ${c.city}`, `${c.area_ar}، ${c.city_ar}`)}
+            {c.distance_km != null ? ` · ${t("common.km", { n: c.distance_km })}` : ""}
           </AppText>
         </View>
       </View>

@@ -3,7 +3,7 @@ import { Pressable, TextInput, View } from "react-native";
 import { router, useLocalSearchParams } from "expo-router";
 import { useTheme } from "@/theme";
 import { pickLang, useI18n } from "@/i18n";
-import { repositories } from "@/data";
+import { isRealData, repositories } from "@/data";
 import { useQueryish } from "@/data/hooks";
 import { consultationTotal, formatDayDate, formatOMR, formatTime } from "@/utils/format";
 import { figuresFor, fontFamilyFor, inputFontSize } from "@/theme/typography";
@@ -50,6 +50,9 @@ export default function AppointmentDetail() {
   const [rated, setRated] = useState(false);
   const [reschedDate, setReschedDate] = useState<string | null>(null);
   const [reschedSlot, setReschedSlot] = useState<string | null>(null);
+  // Declared with the other hooks — the loading early-return below must never
+  // change the hook order (React #310).
+  const [actionError, setActionError] = useState<string | null>(null);
 
   const reschedSlots = useQueryish(
     () =>
@@ -77,9 +80,17 @@ export default function AppointmentDetail() {
 
   const act = async (fn: () => Promise<void>) => {
     setBusy(true);
-    await fn();
-    await appt.refetch();
-    setBusy(false);
+    setActionError(null);
+    try {
+      await fn();
+      await appt.refetch();
+    } catch (e) {
+      // Real-mode RPCs refuse with business codes (cutoff passed, not
+      // confirmed yet, check-in window closed…) — show, don't crash.
+      setActionError(e instanceof Error ? e.message : String(e));
+    } finally {
+      setBusy(false);
+    }
   };
 
   return (
@@ -188,9 +199,26 @@ export default function AppointmentDetail() {
       </Card>
 
       {/* Actions — state-appropriate, one primary */}
+      {actionError ? (
+        <View style={{ flexDirection: row, gap: 8, alignItems: "center", backgroundColor: colors.errorSurface, borderRadius: radii.md, padding: 12, marginTop: spacing.md }}>
+          <Icon name="alert" size={16} color={colors.error} />
+          <AppText role="caption" color={colors.error} style={{ flex: 1 }}>
+            {actionError}
+          </AppText>
+        </View>
+      ) : null}
       <View style={{ gap: 10, marginTop: spacing.md }}>
         {unpaid ? (
-          <CtaButton label={t("appointments.payNow")} icon="card" loading={busy} onPress={() => act(() => repositories.appointment.pay(a.id))} />
+          <CtaButton
+            label={t("appointments.payNow")}
+            icon="card"
+            loading={busy}
+            onPress={() =>
+              isRealData
+                ? router.push(`/booking/pay?appointment_id=${a.id}`)
+                : act(() => repositories.appointment.pay(a.id))
+            }
+          />
         ) : null}
         {a.status === "confirmed" ? (
           <CtaButton label={t("appointments.checkInAction")} icon="check-circle" loading={busy} onPress={() => act(() => repositories.appointment.checkIn(a.id))} />
@@ -301,10 +329,16 @@ export default function AppointmentDetail() {
           style={{ marginTop: 14 }}
           onPress={async () => {
             setBusy(true);
-            await repositories.review.submit({ doctorId: d.id, rating: stars, comment });
-            setBusy(false);
-            setRated(true);
-            setRateOpen(false);
+            try {
+              await repositories.review.submit({ doctorId: d.id, rating: stars, comment, appointmentId: a.id });
+              setRated(true);
+            } catch (e) {
+              // Already reviewed = still a "done" state for the sheet.
+              if (e instanceof Error && e.message === "ALREADY_REVIEWED") setRated(true);
+            } finally {
+              setBusy(false);
+              setRateOpen(false);
+            }
           }}
         />
       </Sheet>

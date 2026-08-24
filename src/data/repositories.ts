@@ -115,7 +115,8 @@ export interface NotificationRepository {
 }
 
 export interface ReviewRepository {
-  submit(input: { doctorId: string; rating: number; comment?: string }): Promise<void>;
+  /** appointmentId gates eligibility in real mode (own completed visit — RLS-enforced). */
+  submit(input: { doctorId: string; rating: number; comment?: string; appointmentId?: string | null }): Promise<void>;
 }
 
 export interface FavouriteRepository {

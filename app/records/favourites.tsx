@@ -137,7 +137,7 @@ export default function Favourites() {
               key={c.id}
               leading={<Avatar name={pickLang(isRTL, c.name, c.name_ar)} hue={c.coverHue} size={46} />}
               title={pickLang(isRTL, c.name, c.name_ar)}
-              caption={`${pickLang(isRTL, c.area, c.area_ar)}${isRTL ? "، " : ", "}${pickLang(isRTL, c.city, c.city_ar)} · ${t("common.km", { n: c.distance_km })}`}
+              caption={`${pickLang(isRTL, c.area, c.area_ar)}${isRTL ? "، " : ", "}${pickLang(isRTL, c.city, c.city_ar)}${c.distance_km != null ? ` · ${t("common.km", { n: c.distance_km })}` : ""}`}
               extra={<Rating value={c.rating} count={c.reviews} compact />}
               onPress={() => router.push(`/clinics/${c.id}`)}
               onRemove={() => remove("clinic", c.id)}

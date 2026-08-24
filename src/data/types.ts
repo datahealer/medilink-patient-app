@@ -122,7 +122,8 @@ export interface Clinic {
   rating: number;
   reviews: number;
   doctors_count: number;
-  distance_km: number;
+  /** Absent when the viewer's location is unknown (real mode without geo). */
+  distance_km?: number;
   featured?: boolean;
   is_verified: boolean;
   latitude: number;
@@ -155,6 +156,8 @@ export interface HealthPackage {
 export interface AvailableSlot {
   start: string; // "HH:MM" — raw value sent to booking
   period: "morning" | "afternoon" | "evening";
+  /** "HH:MM" — present in real mode (the reschedule RPC needs the slot end). */
+  end?: string;
 }
 
 export interface Appointment {

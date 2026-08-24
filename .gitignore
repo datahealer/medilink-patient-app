@@ -5,3 +5,7 @@ web-build/
 *.log
 .DS_Store
 expo-env.d.ts
+
+# Local environment (real-mode config + demo credentials) — never commit
+.env
+.env.*

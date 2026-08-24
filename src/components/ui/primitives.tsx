@@ -1,6 +1,7 @@
 import React from "react";
 import { Pressable, View, type StyleProp, type ViewStyle } from "react-native";
 import { useTheme } from "@/theme";
+import { useI18n } from "@/i18n";
 import { AppText } from "./AppText";
 import { Icon, type IconName } from "./Icon";
 
@@ -234,6 +235,18 @@ export function Divider({ inset = 0 }: { inset?: number }) {
 /* ------------------------------ RatingStars ------------------------------ */
 export function Rating({ value, count, compact }: { value: number; count?: number; compact?: boolean }) {
   const { colors, row } = useTheme();
+  const { t } = useI18n();
+  // DESIGN.md rule: never render "0.0 (0)" — an unrated provider is "new",
+  // not zero-rated (live data has genuinely-new providers; mock rarely did).
+  if (count === 0 || (count == null && value === 0)) {
+    return (
+      <View style={{ flexDirection: row, alignItems: "center", gap: 4 }}>
+        <AppText role={compact ? "tiny" : "caption"} weight="bold" color={colors.primaryMuted}>
+          {t("tags.new")}
+        </AppText>
+      </View>
+    );
+  }
   return (
     <View style={{ flexDirection: row, alignItems: "center", gap: 4 }}>
       <Icon name="star" size={compact ? 13 : 15} color="#E8A33D" fill strokeWidth={0} />

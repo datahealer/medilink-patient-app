@@ -84,7 +84,8 @@ ${markers}
                 <View style={{ flexDirection: row, gap: 8, alignItems: "center" }}>
                   <Rating value={selected.rating} compact />
                   <AppText role="tiny" color={colors.textMuted}>
-                    {pickLang(isRTL, selected.area, selected.area_ar)} · {t("common.km", { n: selected.distance_km })}
+                    {pickLang(isRTL, selected.area, selected.area_ar)}
+                    {selected.distance_km != null ? ` · ${t("common.km", { n: selected.distance_km })}` : ""}
                   </AppText>
                 </View>
               </View>

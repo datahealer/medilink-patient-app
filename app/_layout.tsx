@@ -8,6 +8,7 @@ import * as SplashScreen from "expo-splash-screen";
 import { I18nProvider, useI18n } from "@/i18n";
 import { ThemeProvider } from "@/theme";
 import { BRAND_FONT_FILES } from "@/theme/typography";
+import { authBridge } from "@/data";
 
 SplashScreen.preventAutoHideAsync().catch(() => {});
 
@@ -33,6 +34,12 @@ export default function RootLayout() {
   useEffect(() => {
     if (fontsLoaded) SplashScreen.hideAsync().catch(() => {});
   }, [fontsLoaded]);
+
+  // Real mode: reconcile the persisted auth flag with the live Supabase
+  // session once per launch (no-op in mock mode).
+  useEffect(() => {
+    authBridge.init();
+  }, []);
 
   if (!fontsLoaded) return <View style={{ flex: 1, backgroundColor: "#2E1A47" }} />;
 

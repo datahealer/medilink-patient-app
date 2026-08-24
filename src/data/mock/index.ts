@@ -230,10 +230,10 @@ export const repositories: Repositories = {
       }
       if (params.specialty) list = list.filter((c) => clinicOffers(c, params.specialty!));
       if (params.type) list = list.filter((c) => c.type === params.type);
-      if (params.maxDistanceKm) list = list.filter((c) => c.distance_km <= params.maxDistanceKm!);
+      if (params.maxDistanceKm) list = list.filter((c) => (c.distance_km ?? 0) <= params.maxDistanceKm!);
       if (params.minRating) list = list.filter((c) => c.rating >= params.minRating!);
       if (params.openNow) list = list.filter((c) => c.working_hours.some((w) => w.dow.includes(new Date().getDay()) && w.open));
-      return delay([...list].sort((a, b) => a.distance_km - b.distance_km));
+      return delay([...list].sort((a, b) => (a.distance_km ?? 0) - (b.distance_km ?? 0)));
     },
     clinicTypes: (specialty) =>
       delay(

@@ -240,13 +240,17 @@ export default function Home() {
         ))}
       </View>
 
-      {/* Packages */}
-      <SectionHeader title={t("home.packages")} actionLabel={t("common.seeAll")} onAction={() => router.push("/packages")} />
-      <HScroll bleed={spacing.md}>
-        {(packages.data ?? []).slice(0, 5).map((p) => (
-          <PackageCard key={p.id} pkg={p} />
-        ))}
-      </HScroll>
+      {/* Packages — hidden while the live catalog has none (real mode). */}
+      {(packages.data ?? []).length > 0 ? (
+        <>
+          <SectionHeader title={t("home.packages")} actionLabel={t("common.seeAll")} onAction={() => router.push("/packages")} />
+          <HScroll bleed={spacing.md}>
+            {(packages.data ?? []).slice(0, 5).map((p) => (
+              <PackageCard key={p.id} pkg={p} />
+            ))}
+          </HScroll>
+        </>
+      ) : null}
 
       {/* Nearby clinics */}
       <SectionHeader title={t("home.nearby")} actionLabel={t("common.seeAll")} onAction={() => router.push("/clinics")} />

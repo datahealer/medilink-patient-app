@@ -145,7 +145,7 @@ export function ClinicCard({ clinic, wide, specialty }: { clinic: Clinic; wide?:
         <View style={{ flexDirection: row, alignItems: "center", gap: 4 }}>
           <Icon name="map-pin" size={13} color={colors.textFaint} />
           <AppText role="caption" color={colors.textMuted} numberOfLines={1} style={{ flexShrink: 1 }}>
-            {area} · {t("common.km", { n: clinic.distance_km })}
+            {clinic.distance_km != null ? `${area} · ${t("common.km", { n: clinic.distance_km })}` : area}
           </AppText>
         </View>
         <View style={{ flexDirection: row, alignItems: "center", justifyContent: "space-between", marginTop: 2 }}>

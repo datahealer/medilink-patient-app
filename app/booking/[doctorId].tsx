@@ -3,7 +3,7 @@ import { Pressable, TextInput, View } from "react-native";
 import { router, useLocalSearchParams } from "expo-router";
 import { useTheme } from "@/theme";
 import { pickLang, useI18n } from "@/i18n";
-import { repositories } from "@/data";
+import { authBridge, isRealData, repositories } from "@/data";
 import { useQueryish } from "@/data/hooks";
 import type { FamilyRelation, Gender } from "@/data/types";
 import { useBookingStore } from "@/stores/bookingStore";
@@ -79,6 +79,10 @@ export default function BookingWizard() {
 
   const [step, setStep] = useState(0);
   const [busy, setBusy] = useState(false);
+  // Real-mode failures (RPC refusals, auth) surface inline — declared with the
+  // other hooks: the component early-returns while the doctor loads, and a
+  // hook after that return breaks the hooks order (React #310).
+  const [flowError, setFlowError] = useState<string | null>(null);
 
   // Consents — each is shown at most once, ever (see appStore).
   const [pdplChecked, setPdplChecked] = useState(false);
@@ -182,12 +186,24 @@ export default function BookingWizard() {
     if (askPromo) decidePromoConsent(promoChecked);
     setBusy(false);
     draft.reset();
-    router.replace(`/booking/success?id=${created.id}`);
+    // Real mode: the slot is held pending payment — card checkout confirms it.
+    // Mock keeps the original celebrate-immediately behavior.
+    if (isRealData && created.payment_status !== "paid") {
+      router.replace(`/booking/pay?appointment_id=${created.id}`);
+    } else {
+      router.replace(`/booking/success?id=${created.id}`);
+    }
   };
 
   const confirm = async () => {
     setBusy(true);
-    await createAppointment(draft.patientId);
+    setFlowError(null);
+    try {
+      await createAppointment(draft.patientId);
+    } catch (e) {
+      setBusy(false);
+      setFlowError(e instanceof Error ? e.message : String(e));
+    }
   };
 
   /**
@@ -197,24 +213,33 @@ export default function BookingWizard() {
    */
   const verifyAndPay = async () => {
     setBusy(true);
-    signIn();
-    let patientId = "self";
-    const rel = GUEST_RELATIONS.find((r) => r.key === relation);
-    if (rel) {
-      // The typed name goes on the file as-is in both language slots — the
-      // patient wrote it once, in their script; production transliterates.
-      const name = patientName.trim();
-      const member = await repositories.family.add({
-        full_name: name,
-        full_name_ar: name,
-        relation: rel.relation,
-        gender: rel.gender,
-        date_of_birth: `${new Date().getFullYear() - Number(age)}-01-01`,
-      });
-      patientId = member.id;
+    setFlowError(null);
+    try {
+      // Real mode: the OTP sheet resolves to a real Supabase session first
+      // (demo account behind the theater — see src/data/real/auth.ts).
+      await authBridge.demoSignIn(phone);
+      signIn();
+      let patientId = "self";
+      const rel = GUEST_RELATIONS.find((r) => r.key === relation);
+      if (rel) {
+        // The typed name goes on the file as-is in both language slots — the
+        // patient wrote it once, in their script; production transliterates.
+        const name = patientName.trim();
+        const member = await repositories.family.add({
+          full_name: name,
+          full_name_ar: name,
+          relation: rel.relation,
+          gender: rel.gender,
+          date_of_birth: `${new Date().getFullYear() - Number(age)}-01-01`,
+        });
+        patientId = member.id;
+      }
+      setOtpOpen(false);
+      await createAppointment(patientId);
+    } catch (e) {
+      setBusy(false);
+      setFlowError(e instanceof Error ? e.message : String(e));
     }
-    setOtpOpen(false);
-    await createAppointment(patientId);
   };
 
   const patientIsSelf = guestFlow ? relation === "self" : draft.patientId === "self";
@@ -594,6 +619,15 @@ export default function BookingWizard() {
               {t("booking.holdNote")}
             </AppText>
           </View>
+
+          {flowError ? (
+            <View style={{ flexDirection: row, gap: 8, alignItems: "center", backgroundColor: colors.errorSurface, borderRadius: radii.md, padding: 12 }}>
+              <Icon name="alert" size={16} color={colors.error} />
+              <AppText role="caption" color={colors.error} style={{ flex: 1 }}>
+                {flowError}
+              </AppText>
+            </View>
+          ) : null}
         </View>
       ) : null}
 
@@ -624,6 +658,11 @@ export default function BookingWizard() {
             </View>
           ))}
         </View>
+        {flowError ? (
+          <AppText role="caption" color={colors.error} align="center" style={{ marginBottom: 8 }}>
+            {flowError}
+          </AppText>
+        ) : null}
         <CtaButton label={t("booking.verifyPay")} loading={busy} disabled={!otp[3]} onPress={verifyAndPay} />
         <Pressable onPress={() => setOtp(["1", "2", "3", "4"])} style={{ alignItems: "center", padding: 10 }} accessibilityRole="button">
           <AppText role="label" color={colors.primaryMuted}>

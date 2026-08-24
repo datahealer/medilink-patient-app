@@ -3,7 +3,7 @@ import { View } from "react-native";
 import { router, useFocusEffect } from "expo-router";
 import { useTheme } from "@/theme";
 import { pickLang, useI18n } from "@/i18n";
-import { repositories } from "@/data";
+import { authBridge, repositories } from "@/data";
 import { useQueryish } from "@/data/hooks";
 import { useAppStore } from "@/stores/appStore";
 import { ageFrom, ltr } from "@/utils/format";
@@ -143,6 +143,7 @@ export default function Profile() {
             variant="danger"
             onPress={() => {
               setConfirmOut(false);
+              void authBridge.signOut(); // drop the real Supabase session too
               signOut();
               router.replace("/auth/sign-in");
             }}

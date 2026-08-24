@@ -389,7 +389,7 @@ function clinicTag(c: ClinicSeed): Tag | null {
   const seed = hash(c.id);
   if (c.working_hours[0]?.open === "00:00") return seed % 2 === 0 ? { key: "open247" } : null;
   if (c.reviews < 20) return { key: "new" };
-  if (c.distance_km <= 2.5 && seed % 3 === 0) return { key: "nearest" };
+  if ((c.distance_km ?? 99) <= 2.5 && seed % 3 === 0) return { key: "nearest" };
   if (c.rating >= 4.8 && seed % 4 === 0) return { key: "topRated" };
   return null;
 }
