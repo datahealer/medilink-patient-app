@@ -268,9 +268,16 @@ export default function AppointmentDetail() {
         <DayStrip selected={reschedDate} onSelect={(iso) => { setReschedDate(iso); setReschedSlot(null); }} />
         <View style={{ minHeight: 120, marginTop: 12 }}>
           {reschedDate ? (
-            (reschedSlots.data ?? []).length ? (
+            reschedSlots.isLoading ? (
+              // Live availability takes a round-trip — hold the grid's place.
+              <View style={{ flexDirection: row, flexWrap: "wrap", gap: 8 }}>
+                {[0, 1, 2, 3, 4, 5].map((i) => (
+                  <Skeleton key={i} width={96} height={44} radius={radii.md} />
+                ))}
+              </View>
+            ) : (reschedSlots.data ?? []).length ? (
               <SlotGrid slots={reschedSlots.data ?? []} selected={reschedSlot} onSelect={setReschedSlot} />
-            ) : reschedSlots.isLoading ? null : (
+            ) : (
               <AppText role="caption" color={colors.textMuted} align="center">
                 {t("booking.noSlots")}
               </AppText>

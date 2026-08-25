@@ -125,14 +125,14 @@ export default function ProfileTab() {
         <ListItem
           icon="users"
           title={t("records.family")}
-          subtitle={`${familyList.data?.length ?? 0}`}
+          subtitle={familyList.isLoading ? "…" : `${familyList.data?.length ?? 0}`}
           onPress={() => router.push("/records/family")}
         />
         <Divider inset={54} />
         <ListItem
           icon="heart"
           title={t("records.favourites")}
-          subtitle={`${favs.data?.length ?? 0}`}
+          subtitle={favs.isLoading ? "…" : `${favs.data?.length ?? 0}`}
           onPress={() => router.push("/records/favourites")}
         />
         <Divider inset={54} />

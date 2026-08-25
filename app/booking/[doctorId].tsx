@@ -23,6 +23,7 @@ import {
   LoadingNarrator,
   Screen,
   Sheet,
+  Skeleton,
   SlotGrid,
   Stepper,
 } from "@/components/ui";
@@ -398,7 +399,14 @@ export default function BookingWizard() {
               {t("booking.chooseTime")}
             </AppText>
             {draft.dateISO ? (
-              slots.isLoading ? null : (slots.data ?? []).length ? (
+              slots.isLoading ? (
+                // Live availability takes a round-trip — hold the grid's place.
+                <View style={{ flexDirection: row, flexWrap: "wrap", gap: 8 }}>
+                  {[0, 1, 2, 3, 4, 5].map((i) => (
+                    <Skeleton key={i} width={96} height={44} radius={radii.md} />
+                  ))}
+                </View>
+              ) : (slots.data ?? []).length ? (
                 <SlotGrid slots={slots.data ?? []} selected={draft.slotStart} onSelect={(s) => draft.set({ slotStart: s })} />
               ) : (
                 <AppText role="caption" color={colors.textMuted}>

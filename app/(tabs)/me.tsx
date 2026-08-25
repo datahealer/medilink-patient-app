@@ -7,7 +7,7 @@ import { repositories } from "@/data";
 import { useQueryish } from "@/data/hooks";
 import type { AiSuggestion, Doctor } from "@/data/types";
 import { figuresFor, fontFamilyFor, inputFontSize } from "@/theme/typography";
-import { AppText, Avatar, Badge, Icon, Rating, Screen } from "@/components/ui";
+import { AppText, Avatar, Badge, Icon, Rating, Screen, Skeleton } from "@/components/ui";
 import { formatOMR } from "@/utils/format";
 
 interface ChatMsg {
@@ -245,7 +245,9 @@ function MiniDoctor({ id }: { id: string }) {
   const { t } = i18n;
   const doctor = useQueryish(() => repositories.doctor.get(id), [id]);
   const d: Doctor | null = doctor.data;
-  if (!d) return null;
+  // Hold the row's place while the doctor loads — popping in unannounced is
+  // exactly the "content appears from nowhere" jank this screen shouldn't have.
+  if (!d) return doctor.isLoading ? <Skeleton height={64} radius={radii.md + 2} /> : null;
   const name = pickLang(isRTL, d.full_name, d.full_name_ar);
   return (
     <Pressable

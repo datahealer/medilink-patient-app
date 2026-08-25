@@ -452,21 +452,22 @@ const doctorRepo: DoctorRepository = {
     return list;
   },
   async get(id) {
-    const row = await q.getDoctor(id);
+    // One round-trip, not three: the row, the availability flag and today's
+    // slot list are independent — fetch them together so the profile paints
+    // as fast as the network allows. Both extras are best-effort.
+    const [row, slots] = await Promise.all([
+      q.getDoctor(id),
+      q.getAvailableSlots(id, omanToday()).catch(() => []),
+    ]);
     if (!row) return null;
     const [d] = await withAvailability([mapDoctor(row)]);
-    // "Nearest appointments" chips — today's next bookable times. The RPC
-    // also returns times already past on the current day, so trim to future.
-    try {
-      const slots = await q.getAvailableSlots(id, omanToday());
-      const nowMin = omanNowMinutes();
-      d.slots_today = slots
-        .map((s) => s.start)
-        .filter((s) => toMinutes(s) > nowMin)
-        .slice(0, 3);
-    } catch {
-      // best-effort — without it the section simply stays hidden
-    }
+    // "Nearest appointments" chips — the RPC also returns times already past
+    // on the current day, so trim to future.
+    const nowMin = omanNowMinutes();
+    d.slots_today = slots
+      .map((s) => s.start)
+      .filter((s) => toMinutes(s) > nowMin)
+      .slice(0, 3);
     return d;
   },
   async top() {

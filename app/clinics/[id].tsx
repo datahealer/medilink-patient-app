@@ -210,7 +210,7 @@ export default function ClinicDetail() {
             : t("clinic.doctors")
         }
         actionLabel={
-          specialty
+          specialty && !doctors.isLoading
             ? showAllDoctors
               ? t("clinic.onlySpecialty", { name: specialtyName(specialty) })
               : t("clinic.allDoctors", { n: allDoctors.length })
@@ -219,9 +219,10 @@ export default function ClinicDetail() {
         onAction={specialty ? () => setShowAllDoctors((v) => !v) : undefined}
       />
       <View style={{ gap: 10 }}>
-        {shownDoctors.map((d) => (
-          <DoctorCard key={d.id} doctor={d} />
-        ))}
+        {doctors.isLoading
+          ? // The roster arrives a beat after the clinic header — hold its place.
+            [0, 1, 2].map((i) => <Skeleton key={i} height={104} radius={radii.lg} />)
+          : shownDoctors.map((d) => <DoctorCard key={d.id} doctor={d} />)}
       </View>
 
       {/* Which doctor performs the service you tapped */}

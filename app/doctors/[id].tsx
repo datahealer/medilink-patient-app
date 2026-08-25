@@ -231,6 +231,9 @@ export default function DoctorDetail() {
         <Rating value={reviews.data?.summary.average ?? d.rating} count={reviews.data?.summary.total ?? d.reviews} />
       </View>
       <HScroll bleed={spacing.md}>
+        {reviews.isLoading && !reviews.data
+          ? [0, 1].map((i) => <Skeleton key={i} width={260} height={122} radius={radii.lg} />)
+          : null}
         {(reviews.data?.reviews ?? []).map((r) => (
           <Card key={r.id} style={{ width: 260 }}>
             <View style={{ flexDirection: row, justifyContent: "space-between", alignItems: "center" }}>

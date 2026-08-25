@@ -7,7 +7,7 @@ import { repositories } from "@/data";
 import { useQueryish } from "@/data/hooks";
 import { useAppStore } from "@/stores/appStore";
 import type { NotificationItem } from "@/data/types";
-import { AppHeader, AppText, Button, Card, EmptyState, Icon, Screen, type IconName } from "@/components/ui";
+import { AppHeader, AppText, Button, Card, EmptyState, Icon, Screen, Skeleton, type IconName } from "@/components/ui";
 
 const KIND_ICON: Record<NotificationItem["kind"], IconName> = {
   assistant: "sparkle",
@@ -19,7 +19,7 @@ const KIND_ICON: Record<NotificationItem["kind"], IconName> = {
 };
 
 export default function Notifications() {
-  const { colors, spacing, row, isRTL } = useTheme();
+  const { colors, spacing, radii, row, isRTL } = useTheme();
   const { t } = useI18n();
   // Reminders and payment receipts belong to a file — a guest has none.
   const authed = useAppStore((s) => s.authed);
@@ -70,7 +70,13 @@ export default function Notifications() {
         />
       }
     >
-      {(list.data ?? []).length === 0 && !list.isLoading ? (
+      {list.isLoading && !list.data ? (
+        <View style={{ gap: 8, marginTop: spacing.md }}>
+          {[0, 1, 2].map((i) => (
+            <Skeleton key={i} height={72} radius={radii.lg} />
+          ))}
+        </View>
+      ) : (list.data ?? []).length === 0 ? (
         <EmptyState icon="bell" title={t("notif.empty")} />
       ) : (
         groups.map((g) =>

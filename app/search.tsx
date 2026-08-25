@@ -17,6 +17,7 @@ import {
   Screen,
   SearchField,
   SectionHeader,
+  Skeleton,
   type IconName,
 } from "@/components/ui";
 
@@ -45,11 +46,12 @@ export default function SearchScreen() {
     searching && !doctors.isLoading && !clinics.isLoading && !packages.isLoading &&
     !(doctors.data?.length || clinics.data?.length || packages.data?.length);
 
+  // "…" while a count loads — "0 doctors" flashing to "152 doctors" reads as a bug.
   const doors: { icon: IconName; title: string; count: string; route: string }[] = [
-    { icon: "stethoscope", title: t("explore.doctors"), count: t("explore.doctorsCount", { n: totalDoctors.data?.length ?? 0 }), route: "/doctors" },
-    { icon: "building", title: t("explore.clinics"), count: t("explore.clinicsCount", { n: totalClinics.data?.length ?? 0 }), route: "/clinics" },
-    { icon: "file-heart", title: t("packages.title"), count: t("explore.packagesCount", { n: totalPackages.data?.length ?? 0 }), route: "/packages" },
-    { icon: "sparkles", title: t("explore.specialtiesTitle"), count: t("explore.results", { n: specialties.data?.length ?? 0 }), route: "/specialties" },
+    { icon: "stethoscope", title: t("explore.doctors"), count: totalDoctors.isLoading ? "…" : t("explore.doctorsCount", { n: totalDoctors.data?.length ?? 0 }), route: "/doctors" },
+    { icon: "building", title: t("explore.clinics"), count: totalClinics.isLoading ? "…" : t("explore.clinicsCount", { n: totalClinics.data?.length ?? 0 }), route: "/clinics" },
+    { icon: "file-heart", title: t("packages.title"), count: totalPackages.isLoading ? "…" : t("explore.packagesCount", { n: totalPackages.data?.length ?? 0 }), route: "/packages" },
+    { icon: "sparkles", title: t("explore.specialtiesTitle"), count: specialties.isLoading ? "…" : t("explore.results", { n: specialties.data?.length ?? 0 }), route: "/specialties" },
   ];
 
   return (
@@ -73,6 +75,15 @@ export default function SearchScreen() {
           </View>
         ) : (
           <>
+            {/* First results for this query still in flight and nothing stale
+                to show — hold the list's place instead of a blank screen. */}
+            {(doctors.isLoading || clinics.isLoading) && !(doctors.data?.length || clinics.data?.length || packages.data?.length) ? (
+              <View style={{ gap: 10, marginTop: spacing.sm }}>
+                {[0, 1, 2].map((i) => (
+                  <Skeleton key={i} height={104} radius={radii.lg} />
+                ))}
+              </View>
+            ) : null}
             {doctors.data?.length ? (
               <>
                 <SectionHeader
