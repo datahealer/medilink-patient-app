@@ -37,5 +37,24 @@ export const authBridge = isRealData
       init: () => {},
     };
 
+/**
+ * Pre-warm everything the home screen reads, so the post-sign-in landing is
+ * already populated. Real mode: profile + clinic/doctor pools are cached at
+ * the query layer, so this genuinely saves the round-trips; the visits list
+ * still refetches on mount but alone it is quick. Never throws, never takes
+ * longer than `capMs` — a slow network degrades to the normal skeletons.
+ */
+export async function warmUpHomeData(capMs = 6000): Promise<void> {
+  if (!isRealData) return;
+  const warm = Promise.allSettled([
+    repositories.patient.listPeople(),
+    repositories.appointment.list("upcoming"),
+    repositories.discovery.featuredClinics(),
+    repositories.doctor.top(),
+    repositories.notification.unreadCount(),
+  ]);
+  await Promise.race([warm, new Promise((r) => setTimeout(r, capMs))]);
+}
+
 export * from "./types";
 export type { Repositories, DoctorSearchParams } from "./repositories";

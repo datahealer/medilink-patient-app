@@ -6,6 +6,7 @@ export { Icon, type IconName } from "./Icon";
 export { Avatar, ClinicCover } from "./Avatar";
 export { Orbs, LinkDots } from "./Decor";
 export { Badge, Card, Chip, Divider, EmptyState, ListItem, Rating, SectionHeader, Skeleton } from "./primitives";
+export { LoadingNarrator } from "./LoadingNarrator";
 export { SegmentedTabs, Sheet, SearchField, Stepper } from "./controls";
 export { DateField } from "./DateField";
 export { HScroll } from "./HScroll";

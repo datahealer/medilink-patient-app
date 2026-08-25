@@ -20,6 +20,7 @@ import {
   DayStrip,
   Divider,
   Icon,
+  LoadingNarrator,
   Screen,
   Sheet,
   SlotGrid,
@@ -662,6 +663,17 @@ export default function BookingWizard() {
           <AppText role="caption" color={colors.error} align="center" style={{ marginBottom: 8 }}>
             {flowError}
           </AppText>
+        ) : null}
+        {busy ? (
+          <View style={{ marginBottom: 10 }}>
+            <LoadingNarrator
+              messages={
+                relation !== "self"
+                  ? [t("loading.confirmingCode"), t("loading.creatingFile"), t("loading.reservingSlot")]
+                  : [t("loading.confirmingCode"), t("loading.reservingSlot")]
+              }
+            />
+          </View>
         ) : null}
         <CtaButton label={t("booking.verifyPay")} loading={busy} disabled={!otp[3]} onPress={verifyAndPay} />
         <Pressable onPress={() => setOtp(["1", "2", "3", "4"])} style={{ alignItems: "center", padding: 10 }} accessibilityRole="button">

@@ -4,10 +4,10 @@ import { router, useLocalSearchParams } from "expo-router";
 import { LinearGradient } from "expo-linear-gradient";
 import { useTheme } from "@/theme";
 import { useI18n } from "@/i18n";
-import { authBridge } from "@/data";
+import { authBridge, warmUpHomeData } from "@/data";
 import { useAppStore } from "@/stores/appStore";
 import { fontFamilyFor } from "@/theme/typography";
-import { AppHeader, AppText, CtaButton, Icon, Orbs, Screen } from "@/components/ui";
+import { AppHeader, AppText, CtaButton, Icon, LoadingNarrator, Orbs, Screen } from "@/components/ui";
 
 export default function SignIn() {
   // `next` comes from the sign-in wall — resume whatever the guest was doing.
@@ -17,7 +17,7 @@ export default function SignIn() {
   const signIn = useAppStore((s) => s.signIn);
   const continueAsGuest = useAppStore((s) => s.continueAsGuest);
   const [phone, setPhone] = useState("9123 4567");
-  const [stage, setStage] = useState<"phone" | "otp">("phone");
+  const [stage, setStage] = useState<"phone" | "otp" | "warming">("phone");
   const [otp, setOtp] = useState(["", "", "", ""]);
   const [busy, setBusy] = useState(false);
   const otpTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
@@ -41,10 +41,15 @@ export default function SignIn() {
       // Mock: theater. Real: a live Supabase session (demo account behind the
       // OTP sheet — see src/data/real/auth.ts).
       await authBridge.demoSignIn(phone);
+      // Narrated warm-up: tell the patient what's loading while the home
+      // screen's data is prefetched, so landing feels instant, not silent.
+      setStage("warming");
       signIn();
+      await warmUpHomeData();
       router.replace(next ? (decodeURIComponent(next) as never) : "/(tabs)");
     } catch (e) {
       setBusy(false);
+      setStage("otp");
       setError(e instanceof Error ? e.message : String(e));
     }
   };
@@ -78,10 +83,24 @@ export default function SignIn() {
       <View style={{ paddingHorizontal: spacing.md, gap: spacing.sm }}>
         <AppText role="screenTitle">{t("auth.signInTitle")}</AppText>
         <AppText role="body" color={colors.textMuted}>
-          {stage === "phone" ? t("auth.signInBody") : t("auth.otpHint", { phone: `⁦+968 ${phone}⁩` })}
+          {stage === "phone" ? t("auth.signInBody") : stage === "otp" ? t("auth.otpHint", { phone: `⁦+968 ${phone}⁩` }) : " "}
         </AppText>
 
-        {stage === "phone" ? (
+        {stage === "warming" ? (
+          // Signed in — narrate the prefetch instead of leaving a mute spinner.
+          <View style={{ paddingVertical: spacing.xl, gap: spacing.md }}>
+            <LoadingNarrator
+              messages={[
+                t("loading.signingIn"),
+                t("loading.profile"),
+                t("loading.visits"),
+                t("loading.nearby"),
+                t("loading.doctors"),
+                t("loading.almost"),
+              ]}
+            />
+          </View>
+        ) : stage === "phone" ? (
           <>
             <AppText role="label" color={colors.textMuted} style={{ marginTop: spacing.md }}>
               {t("auth.phoneLabel")}
@@ -169,18 +188,20 @@ export default function SignIn() {
           </AppText>
         </View>
 
-        <Pressable
-          onPress={() => {
-            continueAsGuest();
-            router.replace("/(tabs)");
-          }}
-          accessibilityRole="button"
-          style={{ alignItems: "center", padding: 12, marginTop: spacing.sm }}
-        >
-          <AppText role="label" color={colors.primaryMuted}>
-            {t("onboarding.continueGuest")}
-          </AppText>
-        </Pressable>
+        {stage !== "warming" ? (
+          <Pressable
+            onPress={() => {
+              continueAsGuest();
+              router.replace("/(tabs)");
+            }}
+            accessibilityRole="button"
+            style={{ alignItems: "center", padding: 12, marginTop: spacing.sm }}
+          >
+            <AppText role="label" color={colors.primaryMuted}>
+              {t("onboarding.continueGuest")}
+            </AppText>
+          </Pressable>
+        ) : null}
       </View>
     </Screen>
   );

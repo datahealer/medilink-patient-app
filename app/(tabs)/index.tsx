@@ -19,6 +19,7 @@ import {
   CtaButton,
   DoctorCard,
   Icon,
+  LoadingNarrator,
   Orbs,
   PackageCard,
   HScroll,
@@ -172,10 +173,14 @@ export default function Home() {
           </View>
         </Card>
       ) : upcoming.isLoading || (next && nextDoctor.isLoading) ? (
-        // Hold the skeleton until the hero can render COMPLETE — resolving the
-        // visits list first and its doctor second used to flash the "book your
-        // first visit" empty card in between.
-        <Skeleton height={150} radius={radii.xl} style={{ marginTop: spacing.md }} />
+        // Hold the placeholder until the hero can render COMPLETE — and narrate
+        // the wait instead of leaving a mute grey block.
+        <View style={{ marginTop: spacing.md }}>
+          <Skeleton height={150} radius={radii.xl} />
+          <View style={{ position: "absolute", top: 0, bottom: 0, left: 0, right: 0, alignItems: "center", justifyContent: "center" }}>
+            <LoadingNarrator messages={[t("loading.visits"), t("loading.nearby"), t("loading.almost")]} />
+          </View>
+        </View>
       ) : next && nextDoctor.data ? (
         <LinearGradient
           colors={[colors.heroFrom, colors.heroTo]}

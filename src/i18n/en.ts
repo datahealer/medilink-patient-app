@@ -3,6 +3,17 @@
  * The APP DEFAULT LOCALE IS ARABIC; English is the secondary language.
  */
 export const en = {
+  loading: {
+    signingIn: "Signing you in securely…",
+    profile: "Setting up your health file…",
+    visits: "Loading your visits…",
+    nearby: "Finding clinics near you…",
+    doctors: "Lining up doctors for you…",
+    almost: "Almost there…",
+    confirmingCode: "Confirming your number…",
+    creatingFile: "Creating the patient file…",
+    reservingSlot: "Reserving your slot…",
+  },
   common: {
     appName: "Medilink",
     tagline: "Your Link to Better Care.",

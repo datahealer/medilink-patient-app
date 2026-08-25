@@ -5,6 +5,17 @@ import type { Messages } from "./en";
  * MSA with mild Omani warmth (حيّاك، نشوفك، إن شاء الله) — never a literal translation.
  */
 export const ar: Messages = {
+  loading: {
+    signingIn: "جارٍ تسجيل دخولك بأمان…",
+    profile: "نجهّز ملفك الصحي…",
+    visits: "نحمّل مواعيدك…",
+    nearby: "نبحث عن العيادات القريبة منك…",
+    doctors: "نرتّب لك الأطباء…",
+    almost: "لحظات ونجهز…",
+    confirmingCode: "نتأكد من رقمك…",
+    creatingFile: "ننشئ ملف المريض…",
+    reservingSlot: "نحجز لك الموعد…",
+  },
   common: {
     appName: "ميديلنك",
     tagline: "رابطك لرعاية أفضل.",
