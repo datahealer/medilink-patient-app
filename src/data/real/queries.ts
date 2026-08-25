@@ -118,8 +118,10 @@ export async function updateMyProfile(patch: {
 
 /* ------------------------------- doctors -------------------------------- */
 
+// NB: no `gender` here — the column ships in the pending 20260825000000
+// migration; until it is applied the mapper infers gender from the first name.
 const DOCTOR_LIST_SELECT =
-  "id, full_name, full_name_ar, full_name_ar_status, specialty, years_experience, fees, avg_rating, review_count, profile_photo_url, facility_id, branch_id, status, facilities(name, name_ar, name_ar_status)";
+  "id, full_name, full_name_ar, full_name_ar_status, specialty, years_experience, fees, avg_rating, review_count, profile_photo_url, facility_id, branch_id, status, languages, facilities(name, name_ar, name_ar_status)";
 
 export interface DoctorRow {
   id: string;

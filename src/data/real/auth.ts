@@ -45,13 +45,20 @@ export const realAuth = {
   /** Phone digits the OTP sheet accepted → a real Supabase session. */
   async demoSignIn(phone: string): Promise<void> {
     const digits = phone.replace(/\D/g, "");
-    if (!env.DEMO_PHONE || digits !== env.DEMO_PHONE) throw new DemoPhoneOnlyError();
-    if (!env.DEMO_EMAIL || !env.DEMO_PASSWORD) {
-      throw new Error("Demo account is not configured — set EXPO_PUBLIC_DEMO_EMAIL / EXPO_PUBLIC_DEMO_PASSWORD in .env.");
+    // Roster of seeded demo personas; the single-pair env vars remain the fallback.
+    const roster = env.DEMO_ACCOUNTS.length
+      ? env.DEMO_ACCOUNTS
+      : env.DEMO_PHONE && env.DEMO_EMAIL
+        ? [{ phone: env.DEMO_PHONE, email: env.DEMO_EMAIL }]
+        : [];
+    const account = roster.find((a) => a.phone === digits);
+    if (!account) throw new DemoPhoneOnlyError();
+    if (!env.DEMO_PASSWORD) {
+      throw new Error("Demo account is not configured — set EXPO_PUBLIC_DEMO_PASSWORD in .env.");
     }
     clearSessionCaches();
     const { error } = await supabase.auth.signInWithPassword({
-      email: env.DEMO_EMAIL,
+      email: account.email,
       password: env.DEMO_PASSWORD,
     });
     if (error) throw new Error(error.message);

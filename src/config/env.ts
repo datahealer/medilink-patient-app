@@ -20,4 +20,19 @@ export const env = {
   DEMO_PHONE: (process.env.EXPO_PUBLIC_DEMO_PHONE ?? "").replace(/\D/g, ""),
   DEMO_EMAIL: process.env.EXPO_PUBLIC_DEMO_EMAIL ?? "",
   DEMO_PASSWORD: process.env.EXPO_PUBLIC_DEMO_PASSWORD ?? "",
+  /**
+   * Multi-account roster: "phone:email,phone:email,…". Every listed phone
+   * unlocks its account through the OTP sheet (all share DEMO_PASSWORD), so
+   * the demo can switch between seeded patient personas. Falls back to the
+   * single DEMO_PHONE/DEMO_EMAIL pair when unset.
+   */
+  DEMO_ACCOUNTS: (process.env.EXPO_PUBLIC_DEMO_ACCOUNTS ?? "")
+    .split(",")
+    .map((pair) => {
+      const i = pair.indexOf(":");
+      return i < 0
+        ? null
+        : { phone: pair.slice(0, i).replace(/\D/g, ""), email: pair.slice(i + 1).trim() };
+    })
+    .filter((a): a is { phone: string; email: string } => !!a && !!a.phone && !!a.email),
 };

@@ -62,6 +62,25 @@ const hueOf = (s: string) => hashCode(s) % 360;
 const arOr = (en: string, ar?: string | null, status?: string | null) =>
   ar && (status == null || status === "verified") ? ar : en;
 
+/**
+ * Gender for the search filter. `doctors.gender` is a pending additive
+ * migration (20260825000000) — until it is applied on the live project, infer
+ * from the first name. Omani first names are strongly gendered and the seeded
+ * roster draws from exactly these pools, so the filter stays accurate.
+ */
+const FEMALE_FIRST = new Set([
+  "aisha", "ayesha", "fatma", "fatima", "maryam", "mariam", "noora", "noor", "nora",
+  "zainab", "salma", "huda", "layla", "laila", "samira", "muna", "mona", "amal",
+  "hanan", "asma", "khadija", "zahra", "badriya", "iman", "rahma", "shaikha",
+  "wafa", "jokha", "thuraya", "shamsa", "moza", "azza", "nawal", "ghada", "dalal",
+  "lubna", "buthaina", "sara", "sarah", "safiya", "ruqaya", "sumaya", "halima",
+  "karima", "nadia", "samia", "najat", "ibtisam", "raya", "maha", "reem", "rim",
+]);
+function genderOfName(name: string): Gender {
+  const first = name.replace(/^dr\.?\s*/i, "").trim().split(/\s+/)[0]?.toLowerCase() ?? "";
+  return FEMALE_FIRST.has(first) ? "female" : "male";
+}
+
 /** `doctors.fees` is JSONB `{ in_person, online }`; tolerate a scalar. */
 function feeOf(fees: unknown): number {
   if (typeof fees === "number") return fees;
@@ -141,7 +160,7 @@ function mapDoctor(r: q.DoctorRow): Doctor {
     rating: r.avg_rating != null ? Number(r.avg_rating) : 0,
     reviews: r.review_count ?? 0,
     fee_omr: feeOf(r.fees),
-    gender: (r.gender as Gender) ?? "male",
+    gender: (r.gender as Gender) ?? genderOfName(name),
     experience_years: r.years_experience ?? 0,
     languages: Array.isArray(r.languages) && r.languages.length ? r.languages : ["ar", "en"],
     about: (r.about ?? r.bio ?? "").toString(),
