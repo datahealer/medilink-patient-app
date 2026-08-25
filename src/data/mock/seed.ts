@@ -131,7 +131,9 @@ const CLINIC_KIND: Record<Clinic["type"], { en: (s: string) => string; ar: (s: s
 };
 
 /** Gender-neutral (noun-phrase) bios per specialty + fee bands. */
-const ABOUT: Record<string, { en: string; ar: string; title: string; title_ar: string; title_ar_f: string; fee: [number, number] }> = {
+// Exported: the real data layer reuses these bilingual titles/abouts as the
+// display fallback for live doctors whose DB rows carry no bio.
+export const ABOUT: Record<string, { en: string; ar: string; title: string; title_ar: string; title_ar_f: string; fee: [number, number] }> = {
   general: { en: "Everyday illness, chronic disease reviews and preventive care for all ages.", ar: "خبرة في الأمراض اليومية ومراجعات الأمراض المزمنة والرعاية الوقائية لجميع الأعمار.", title: "General Practitioner", title_ar: "طب عام", title_ar_f: "طب عام", fee: [4, 9] },
   dental: { en: "Cosmetic and family dentistry — fillings, root canals and smile design.", ar: "طب أسنان تجميلي وعائلي — حشوات وعلاج عصب وتصميم الابتسامة.", title: "Dental Specialist", title_ar: "أخصائي أسنان", title_ar_f: "أخصائية أسنان", fee: [8, 18] },
   cardiology: { en: "Hypertension, heart-failure clinics and cardiac diagnostics.", ar: "متابعة الضغط وعيادات قصور القلب والفحوصات القلبية التشخيصية.", title: "Cardiology Consultant", title_ar: "استشاري قلب", title_ar_f: "استشارية قلب", fee: [18, 28] },

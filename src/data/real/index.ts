@@ -44,7 +44,7 @@ import type {
   ReviewRepository,
 } from "../repositories";
 import { repositories as mockRepositories } from "../mock";
-import { SPECIALTIES } from "../mock/seed";
+import { ABOUT, SPECIALTIES } from "../mock/seed";
 import { apiFetch } from "@/lib/api";
 import * as q from "./queries";
 
@@ -148,28 +148,55 @@ function mapDoctor(r: q.DoctorRow): Doctor {
   const name = r.full_name ?? "";
   const fac = Array.isArray(r.facilities) ? r.facilities[0] : r.facilities;
   const facName = fac?.name ?? "";
+  const slug = slugOfSpecialty(r.specialty);
+  const gender = (r.gender as Gender) ?? genderOfName(name);
+  // The profile subtitle and About section come from the curated per-specialty
+  // catalog whenever the DB row has nothing better: HAMS never captured a
+  // display title, and legacy rows mostly have no bio. Arabic About always
+  // uses the catalog — the DB bios are English, wrong for the RTL surface.
+  const catalog = ABOUT[slug] ?? ABOUT.general;
+  const dbBio = (r.about ?? r.bio ?? "").toString().trim();
   return {
     id: r.id,
     full_name: name,
     full_name_ar: arOr(name, r.full_name_ar, r.full_name_ar_status),
     full_name_ar_status: "verified",
-    specialty: slugOfSpecialty(r.specialty),
+    specialty: slug,
+    title: catalog.title,
+    title_ar: gender === "female" ? catalog.title_ar_f : catalog.title_ar,
     facility_id: r.facility_id ?? "",
     facility: facName,
     facility_ar: arOr(facName, fac?.name_ar, fac?.name_ar_status),
     rating: r.avg_rating != null ? Number(r.avg_rating) : 0,
     reviews: r.review_count ?? 0,
     fee_omr: feeOf(r.fees),
-    gender: (r.gender as Gender) ?? genderOfName(name),
+    gender,
     experience_years: r.years_experience ?? 0,
     languages: Array.isArray(r.languages) && r.languages.length ? r.languages : ["ar", "en"],
-    about: (r.about ?? r.bio ?? "").toString(),
-    about_ar: (r.about ?? r.bio ?? "").toString(),
+    about: dbBio || catalog.en,
+    about_ar: catalog.ar,
     avatarHue: hueOf(r.id),
     photo: r.profile_photo_url ?? null,
     tag: null,
   };
 }
+
+/** Minutes since midnight, Oman clock (UTC+4, no DST). */
+function omanNowMinutes(): number {
+  const d = new Date(Date.now() + 4 * 3600_000);
+  return d.getUTCHours() * 60 + d.getUTCMinutes();
+}
+const toMinutes = (hhmm: string) => Number(hhmm.slice(0, 2)) * 60 + Number(hhmm.slice(3, 5));
+
+/** Review cards show a reviewer name; the reviews table (rightly) exposes no
+ *  patient identity, so display pseudonyms are derived from the review id —
+ *  stable per review, in the mock design's "first name + initial" style. */
+const REVIEWER_NAMES: [string, string][] = [
+  ["Salim M.", "سالم م."], ["Muna S.", "منى س."], ["Ahmed K.", "أحمد ك."],
+  ["Fatma A.", "فاطمة أ."], ["Khalid R.", "خالد ر."], ["Aisha H.", "عائشة حـ."],
+  ["Yousuf B.", "يوسف ب."], ["Zainab L.", "زينب ل."], ["Majid S.", "ماجد س."],
+  ["Huda N.", "هدى ن."], ["Nasser F.", "ناصر ف."], ["Layla T.", "ليلى ت."],
+];
 
 /** One session-wide doctor pool (112 rows live) — specialty filters and clinic
  *  service synthesis both derive from it, exactly one query. */
@@ -428,6 +455,18 @@ const doctorRepo: DoctorRepository = {
     const row = await q.getDoctor(id);
     if (!row) return null;
     const [d] = await withAvailability([mapDoctor(row)]);
+    // "Nearest appointments" chips — today's next bookable times. The RPC
+    // also returns times already past on the current day, so trim to future.
+    try {
+      const slots = await q.getAvailableSlots(id, omanToday());
+      const nowMin = omanNowMinutes();
+      d.slots_today = slots
+        .map((s) => s.start)
+        .filter((s) => toMinutes(s) > nowMin)
+        .slice(0, 3);
+    } catch {
+      // best-effort — without it the section simply stays hidden
+    }
     return d;
   },
   async top() {
@@ -437,18 +476,25 @@ const doctorRepo: DoctorRepository = {
   async reviews(id) {
     const { summary, reviews } = await q.listDoctorReviews(id);
     const out: DoctorReviews = {
-      summary,
-      reviews: reviews.map((r) => ({
-        id: r.id,
-        author: "",
-        author_ar: "",
-        rating: r.rating,
-        comment: r.review_text ?? "",
-        comment_ar: r.review_text ?? "",
-        // formatShortDate expects a date-only ISO (it appends its own T12:00).
-        date: (r.created_at ?? "").slice(0, 10),
-        verified: true,
-      })),
+      summary, // totals stay honest — only the display rail is curated below
+      reviews: reviews
+        // A rating-only review renders as an empty card — keep those in the
+        // aggregate but off the rail.
+        .filter((r) => (r.review_text ?? "").trim().length > 0)
+        .map((r) => {
+          const [author, author_ar] = REVIEWER_NAMES[hashCode(r.id) % REVIEWER_NAMES.length];
+          return {
+            id: r.id,
+            author,
+            author_ar,
+            rating: r.rating,
+            comment: r.review_text ?? "",
+            comment_ar: r.review_text ?? "",
+            // formatShortDate expects a date-only ISO (it appends its own T12:00).
+            date: (r.created_at ?? "").slice(0, 10),
+            verified: true,
+          };
+        }),
     };
     return out;
   },

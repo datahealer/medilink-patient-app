@@ -512,7 +512,8 @@ const ACCOUNTS = [
 
 async function phase1_fixExistingDoctors() {
   log("\n— Phase 1: repair existing doctors (fees → 4–22 OMR, real specialties) —");
-  const docs = await get("doctors?select=id,full_name,specialty,fees,years_experience,languages,is_active&limit=500");
+  const docs = await get("doctors?select=id,full_name,specialty,fees,years_experience,languages,bio,qualifications,is_active&limit=500");
+  const KNOWN_LANGS = new Set(["ar", "en", "ur", "hi", "fr", "de", "ml"]);
   let garbageIdx = 0, patched = 0;
   for (const d of docs) {
     const raw = (d.specialty ?? "").toLowerCase().trim();
@@ -524,9 +525,16 @@ async function phase1_fixExistingDoctors() {
     const rng = rngOf(`fee:${d.id}`);
     const body = { fees: feeFor(slug, rng) };
     if (label && label !== d.specialty) body.specialty = label;
-    if (d.years_experience == null) body.years_experience = between(rng, 4, 28);
-    if (!Array.isArray(d.languages) || d.languages.length === 0) {
-      body.languages = rng() < 0.3 ? ["ar", "en", pick(rng, ["ur", "hi", "fr"])] : ["ar", "en"];
+    // HAMS test rows carry 0 as often as NULL — both read as "no experience".
+    if (d.years_experience == null || d.years_experience === 0) body.years_experience = between(rng, 4, 28);
+    if (!(d.bio ?? "").trim()) body.bio = BIO[slug];
+    if (!Array.isArray(d.qualifications) || d.qualifications.length === 0) body.qualifications = QUALS[slug];
+    // Every doctor here speaks Arabic and English; keep any real extras.
+    const langs = (Array.isArray(d.languages) ? d.languages : []).filter((l) => KNOWN_LANGS.has(l));
+    if (!langs.includes("ar") || !langs.includes("en")) {
+      const extras = langs.filter((l) => l !== "ar" && l !== "en");
+      if (!extras.length && rng() < 0.3) extras.push(pick(rng, ["ur", "hi", "fr"]));
+      body.languages = ["ar", "en", ...extras];
     }
     await patch(`doctors?id=eq.${d.id}`, body);
     patched++;

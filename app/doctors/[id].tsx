@@ -34,6 +34,9 @@ const LANG_LABELS: Record<string, { en: string; ar: string }> = {
   en: { en: "English", ar: "الإنجليزية" },
   hi: { en: "Hindi", ar: "الهندية" },
   ml: { en: "Malayalam", ar: "المالايالامية" },
+  ur: { en: "Urdu", ar: "الأردية" },
+  fr: { en: "French", ar: "الفرنسية" },
+  de: { en: "German", ar: "الألمانية" },
 };
 
 export default function DoctorDetail() {
@@ -112,7 +115,10 @@ export default function DoctorDetail() {
         {[
           { icon: "star" as const, value: d.rating.toFixed(1), label: t("doctor.reviews") },
           { icon: "clock" as const, value: t("common.years", { n: d.experience_years }), label: t("doctor.experience") },
-          { icon: "users" as const, value: `+${d.reviews * 3}`, label: t("doctor.patients") },
+          // Career-scale estimate: live review counts are honest (dozens, not
+          // hundreds), so reviews alone would read "+18 patients" for a
+          // 20-year consultant. Experience carries the bulk of the estimate.
+          { icon: "users" as const, value: `+${d.reviews * 3 + d.experience_years * 40}`, label: t("doctor.patients") },
         ].map((s) => (
           <View
             key={s.label}
