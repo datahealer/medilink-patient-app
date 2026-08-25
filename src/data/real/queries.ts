@@ -10,7 +10,33 @@ const norm = (s: string | null | undefined) => (s ?? "").trim().replace(/\s+/g, 
 
 /* ------------------------------- profile -------------------------------- */
 
+/**
+ * Cold-start race: screens fire user-scoped queries the moment they mount,
+ * which can be BEFORE the persisted session finishes restoring from storage —
+ * getUser() then answers "not authenticated" once, the query errors, and the
+ * identity renders blank until something refetches. Wait briefly for the
+ * session to land before deciding the caller is signed out.
+ */
+export async function waitForSession(timeoutMs = 4000): Promise<void> {
+  const { data } = await supabase.auth.getSession();
+  if (data.session) return;
+  await new Promise<void>((resolve) => {
+    const timer = setTimeout(() => {
+      sub.data.subscription.unsubscribe();
+      resolve();
+    }, timeoutMs);
+    const sub = supabase.auth.onAuthStateChange((_event, session) => {
+      if (session) {
+        clearTimeout(timer);
+        sub.data.subscription.unsubscribe();
+        resolve();
+      }
+    });
+  });
+}
+
 export async function getCurrentUserId(): Promise<string> {
+  await waitForSession();
   const { data, error } = await supabase.auth.getUser();
   if (error) throw error;
   if (!data.user) throw new Error("Not authenticated");

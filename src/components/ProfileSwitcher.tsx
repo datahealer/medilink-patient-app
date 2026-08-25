@@ -26,7 +26,9 @@ export function personName(p: Person, isRTL: boolean) {
 export function useActivePerson() {
   const activePatientId = useAppStore((s) => s.activePatientId);
   const person = useQueryish(() => repositories.patient.getPerson(activePatientId), [activePatientId]);
-  return { activePatientId, person: person.data, refetch: person.refetch };
+  // isLoading is surfaced so screens can hold a skeleton instead of flashing a
+  // blank identity while the profile loads (visible on real network latency).
+  return { activePatientId, person: person.data, isLoading: person.isLoading, refetch: person.refetch };
 }
 
 /**

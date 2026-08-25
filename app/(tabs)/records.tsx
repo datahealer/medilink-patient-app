@@ -8,7 +8,7 @@ import { useQueryish } from "@/data/hooks";
 import { useAppStore } from "@/stores/appStore";
 import { ProfileSwitcher, personName, useActivePerson } from "@/components/ProfileSwitcher";
 import { ageFrom } from "@/utils/format";
-import { AppText, Avatar, Badge, Button, Card, Divider, EmptyState, Icon, ListItem, Screen } from "@/components/ui";
+import { AppText, Avatar, Badge, Button, Card, Divider, EmptyState, Icon, ListItem, Screen, Skeleton } from "@/components/ui";
 
 const RELATION_KEY: Record<string, string> = {
   self: "profiles.accountHolder",
@@ -25,12 +25,12 @@ const RELATION_KEY: Record<string, string> = {
  * switcher, so reading a family member's file is one tap from here.
  */
 export default function ProfileTab() {
-  const { colors, spacing, row, isRTL } = useTheme();
+  const { colors, spacing, radii, row, isRTL } = useTheme();
   const { t } = useI18n();
   const guest = useAppStore((s) => s.guest);
   const [switcherOpen, setSwitcherOpen] = useState(false);
 
-  const { activePatientId, person, refetch: refetchPerson } = useActivePerson();
+  const { activePatientId, person, isLoading: personLoading, refetch: refetchPerson } = useActivePerson();
   const familyList = useQueryish(() => repositories.family.list(), []);
   const favs = useQueryish(() => repositories.favourite.list(), []);
   const people = useQueryish(() => repositories.patient.listPeople(), []);
@@ -68,8 +68,10 @@ export default function ProfileTab() {
         {t("records.title")}
       </AppText>
 
-      {/* Identity + profile switcher */}
-      {person ? (
+      {/* Identity + profile switcher — hold the shape while it loads */}
+      {personLoading ? (
+        <Skeleton height={86} radius={radii.lg} />
+      ) : person ? (
         <Card onPress={() => setSwitcherOpen(true)}>
           <View style={{ flexDirection: row, gap: 12, alignItems: "center" }}>
             <Avatar name={personName(person, isRTL)} hue={person.avatarHue} size={54} />

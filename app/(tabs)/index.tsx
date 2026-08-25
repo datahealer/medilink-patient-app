@@ -42,7 +42,7 @@ export default function Home() {
   const [switcherOpen, setSwitcherOpen] = useState(false);
 
   // Home reflects whichever profile is active — the account holder's by default.
-  const { activePatientId, person } = useActivePerson();
+  const { activePatientId, person, isLoading: personLoading } = useActivePerson();
   // A guest has no file to read from: never fetch (or show) somebody's visits.
   const upcoming = useQueryish(
     () => (guest ? Promise.resolve([]) : repositories.appointment.list("upcoming", activePatientId)),
@@ -81,28 +81,42 @@ export default function Home() {
     <Screen refreshing={upcoming.isLoading} onRefresh={refetchAll}>
       {/* Header: identity + notifications. The logo lives in onboarding/auth — the home is about the PATIENT. */}
       <View style={{ flexDirection: row, alignItems: "center", gap: 12, marginTop: spacing.sm }}>
-        <Pressable
-          onPress={() => (guest ? router.push("/profile") : setSwitcherOpen(true))}
-          accessibilityRole="button"
-          accessibilityLabel={guest ? t("profile.title") : t("profiles.switch")}
-        >
-          <Avatar
-            name={guest ? (isRTL ? "ز" : "G") : person ? personName(person, isRTL) : ""}
-            hue={person?.avatarHue ?? 275}
-            size={44}
-          />
-        </Pressable>
-        <View style={{ flex: 1 }}>
-          <AppText role="caption" color={colors.textMuted}>
-            {t(greetingKey as never)}
-          </AppText>
-          <View style={{ flexDirection: row, alignItems: "center", gap: 5 }}>
-            <AppText role="h2" weight="bold" numberOfLines={1} style={{ flexShrink: 1 }}>
-              {guest ? t("home.guestHello") : firstName || " "}
-            </AppText>
-            {!guest ? <Icon name="chevron-down" size={15} color={colors.textFaint} /> : null}
-          </View>
-        </View>
+        {!guest && personLoading ? (
+          // Identity is still coming back from the server — hold its shape
+          // rather than flashing an empty avatar + blank name.
+          <>
+            <Skeleton height={44} width={44} radius={22} />
+            <View style={{ flex: 1, gap: 6 }}>
+              <Skeleton height={12} width={90} radius={6} />
+              <Skeleton height={20} width={140} radius={8} />
+            </View>
+          </>
+        ) : (
+          <>
+            <Pressable
+              onPress={() => (guest ? router.push("/profile") : setSwitcherOpen(true))}
+              accessibilityRole="button"
+              accessibilityLabel={guest ? t("profile.title") : t("profiles.switch")}
+            >
+              <Avatar
+                name={guest ? (isRTL ? "ز" : "G") : person ? personName(person, isRTL) : ""}
+                hue={person?.avatarHue ?? 275}
+                size={44}
+              />
+            </Pressable>
+            <View style={{ flex: 1 }}>
+              <AppText role="caption" color={colors.textMuted}>
+                {t(greetingKey as never)}
+              </AppText>
+              <View style={{ flexDirection: row, alignItems: "center", gap: 5 }}>
+                <AppText role="h2" weight="bold" numberOfLines={1} style={{ flexShrink: 1 }}>
+                  {guest ? t("home.guestHello") : firstName || " "}
+                </AppText>
+                {!guest ? <Icon name="chevron-down" size={15} color={colors.textFaint} /> : null}
+              </View>
+            </View>
+          </>
+        )}
         <Pressable
           onPress={() => router.push("/notifications")}
           accessibilityRole="button"
@@ -157,7 +171,10 @@ export default function Home() {
             <Button label={t("common.signIn")} variant="outline" onPress={() => router.push("/auth/sign-in")} />
           </View>
         </Card>
-      ) : upcoming.isLoading ? (
+      ) : upcoming.isLoading || (next && nextDoctor.isLoading) ? (
+        // Hold the skeleton until the hero can render COMPLETE — resolving the
+        // visits list first and its doctor second used to flash the "book your
+        // first visit" empty card in between.
         <Skeleton height={150} radius={radii.xl} style={{ marginTop: spacing.md }} />
       ) : next && nextDoctor.data ? (
         <LinearGradient
@@ -255,17 +272,17 @@ export default function Home() {
       {/* Nearby clinics */}
       <SectionHeader title={t("home.nearby")} actionLabel={t("common.seeAll")} onAction={() => router.push("/clinics")} />
       <HScroll bleed={spacing.md}>
-        {(clinics.data ?? []).map((c) => (
-          <ClinicCard key={c.id} clinic={c} />
-        ))}
+        {clinics.isLoading
+          ? [0, 1, 2].map((i) => <Skeleton key={i} height={190} width={230} radius={radii.lg} />)
+          : (clinics.data ?? []).map((c) => <ClinicCard key={c.id} clinic={c} />)}
       </HScroll>
 
       {/* Doctors — a general section now; "highly rated" is a filter, not the whole list */}
       <SectionHeader title={t("home.topDoctors")} actionLabel={t("common.seeAll")} onAction={() => router.push("/doctors")} />
       <HScroll bleed={spacing.md}>
-        {(topDoctors.data ?? []).slice(0, 4).map((doctor) => (
-          <DoctorCard key={doctor.id} doctor={doctor} compact />
-        ))}
+        {topDoctors.isLoading
+          ? [0, 1, 2].map((i) => <Skeleton key={i} height={170} width={150} radius={radii.lg} />)
+          : (topDoctors.data ?? []).slice(0, 4).map((doctor) => <DoctorCard key={doctor.id} doctor={doctor} compact />)}
       </HScroll>
 
       <ProfileSwitcher

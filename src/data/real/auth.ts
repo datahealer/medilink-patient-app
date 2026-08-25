@@ -16,7 +16,7 @@
 import { env } from "@/config/env";
 import { supabase } from "@/lib/supabase";
 import { useAppStore } from "@/stores/appStore";
-import { clearSessionCaches } from "./queries";
+import { clearSessionCaches, waitForSession } from "./queries";
 
 export class DemoPhoneOnlyError extends Error {
   readonly code = "DEMO_PHONE_ONLY" as const;
@@ -69,6 +69,10 @@ export const realAuth = {
    */
   init(): void {
     void (async () => {
+      // The persisted session restores from storage asynchronously — deciding
+      // "signed out" before it lands would bounce a signed-in user to the
+      // sign-in wall on every cold start.
+      await waitForSession();
       const store = useAppStore.getState();
       const ok = await sessionIsPatient();
       if (ok && !store.authed) store.signIn();
