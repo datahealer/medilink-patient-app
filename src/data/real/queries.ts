@@ -179,8 +179,11 @@ export async function listDoctorsAvailableToday(date: string): Promise<Set<strin
 
 /* ------------------------------ facilities ------------------------------- */
 
+// working_hours + description included: getClinic() serves the pool-cached row
+// straight to the details screen, so the list select must carry everything the
+// detail view renders (an empty hours card and a false "closed" badge otherwise).
 const FACILITY_LIST_SELECT =
-  "id, name, name_ar, name_ar_status, type, address, services, rating, review_count, is_verified, cover_photo_url, phone, doctors!inner(id)";
+  "id, name, name_ar, name_ar_status, type, address, description, services, rating, review_count, is_verified, cover_photo_url, phone, working_hours, doctors!inner(id)";
 
 const FACILITY_DETAIL_SELECT =
   "id, name, name_ar, name_ar_status, type, custom_type, description, address, phone, email, website, logo_url, cover_photo_url, working_hours, services, rating, review_count, status, is_verified";

@@ -336,8 +336,12 @@ const TEMPLATES = [
 
 /* ------------------------------- facilities ------------------------------- */
 
+// Every template accounts for all 7 days — closed days carry open/close: null,
+// which the details screen renders as an explicit red "Closed" row (the
+// approved mock design did the same for Fridays).
 const WH_CLINIC = [
   { days: "Sat – Thu", dow: [6, 0, 1, 2, 3, 4], open: "08:30", close: "21:00" },
+  { days: "Fri", dow: [5], open: null, close: null },
 ];
 const WH_CLINIC_FRI = [
   { days: "Sat – Thu", dow: [6, 0, 1, 2, 3, 4], open: "08:30", close: "21:00" },
@@ -345,7 +349,10 @@ const WH_CLINIC_FRI = [
 ];
 const WH_24_7 = [{ days: "Daily", dow: [0, 1, 2, 3, 4, 5, 6], open: "00:00", close: "23:59" }];
 const WH_LAB = [{ days: "Daily", dow: [0, 1, 2, 3, 4, 5, 6], open: "07:00", close: "22:00" }];
-const WH_OFFICE = [{ days: "Sun – Thu", dow: [0, 1, 2, 3, 4], open: "09:00", close: "19:00" }];
+const WH_OFFICE = [
+  { days: "Sun – Thu", dow: [0, 1, 2, 3, 4], open: "09:00", close: "19:00" },
+  { days: "Fri – Sat", dow: [5, 6], open: null, close: null },
+];
 
 // [name, name_ar, type, city, area, street, lng, lat, wh, targetRating, blurb, doctors[]]
 // doctors: [slug, gender, templateIdx]
@@ -533,8 +540,13 @@ async function phase2_fixExistingFacilities() {
   for (const f of facs) {
     const rng = rngOf(`fac:${f.id}`);
     const body = {};
-    if (!Array.isArray(f.working_hours) || f.working_hours.length === 0) {
-      body.working_hours = f.type === "hospital" ? WH_24_7 : rng() < 0.5 ? WH_CLINIC : WH_CLINIC_FRI;
+    // Repair when hours are missing OR when the template predates the explicit
+    // Friday row (every day must be accounted for, closed days included).
+    const mentionsFriday = Array.isArray(f.working_hours)
+      && f.working_hours.some((e) => Array.isArray(e?.dow) && e.dow.includes(5));
+    if (!Array.isArray(f.working_hours) || f.working_hours.length === 0 || !mentionsFriday) {
+      const curated = NEW_FACILITIES.find((n) => n[0] === f.name)?.[8];
+      body.working_hours = curated ?? (f.type === "hospital" ? WH_24_7 : rng() < 0.5 ? WH_CLINIC : WH_CLINIC_FRI);
     }
     if (!f.description) body.description = FACILITY_BLURB;
     if (!f.phone || f.phone.startsWith("+91")) body.phone = `+968 24${between(rng, 100000, 999999)}`;
