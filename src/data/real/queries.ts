@@ -426,6 +426,21 @@ export async function bookAppointment(input: {
   return { id, reference: (r.reference_number ?? r.reference ?? null) as string | null };
 }
 
+/**
+ * Denormalized display identity on the appointment row. `book_appointment_atomic`
+ * has no name parameter, so rows it creates carry patient_name NULL — and the
+ * HAMS doctor list can't join other patients' profiles under RLS, so it renders
+ * a literal "Patient". Patients may update their own rows (RLS-verified), so we
+ * stamp the person the visit is FOR right after booking. Best-effort.
+ */
+export async function stampAppointmentContact(id: string, name: string, phone: string | null): Promise<void> {
+  try {
+    await supabase.from("appointments").update({ patient_name: name, patient_phone: phone }).eq("id", id);
+  } catch {
+    // display-only denormalization — never fail the booking over it
+  }
+}
+
 export async function cancelAppointment(id: string, reason?: string): Promise<void> {
   const userId = await getCurrentUserId();
   const { data, error } = await supabase.rpc("cancel_appointment_safe", {

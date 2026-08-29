@@ -3,7 +3,7 @@ import { Pressable, TextInput, View } from "react-native";
 import { router, useLocalSearchParams } from "expo-router";
 import { useTheme } from "@/theme";
 import { pickLang, useI18n } from "@/i18n";
-import { authBridge, isRealData, repositories } from "@/data";
+import { authBridge, demoOtpCode, isRealData, repositories } from "@/data";
 import { useQueryish } from "@/data/hooks";
 import type { FamilyRelation, Gender } from "@/data/types";
 import { useBookingStore } from "@/stores/bookingStore";
@@ -121,10 +121,11 @@ export default function BookingWizard() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [pkg.data?.id]);
 
-  // Demo nicety (mirrors sign-in): the OTP "arrives" and fills itself.
+  // Demo nicety (mirrors sign-in): the OTP "arrives" and fills itself with the
+  // real demo code — verification actually checks it (see data/real/auth.ts).
   useEffect(() => {
     if (otpOpen) {
-      otpTimer.current = setTimeout(() => setOtp(["1", "2", "3", "4"]), 900);
+      otpTimer.current = setTimeout(() => setOtp(demoOtpCode.split("")), 900);
       return () => {
         if (otpTimer.current) clearTimeout(otpTimer.current);
       };
@@ -217,9 +218,10 @@ export default function BookingWizard() {
     setBusy(true);
     setFlowError(null);
     try {
-      // Real mode: the OTP sheet resolves to a real Supabase session first
-      // (demo account behind the theater — see src/data/real/auth.ts).
-      await authBridge.demoSignIn(phone);
+      // Real mode: the OTP sheet resolves to a real Supabase session first —
+      // roster phones sign in, any other phone gets an account created on the
+      // fly, so the guest walks out with a real file (src/data/real/auth.ts).
+      await authBridge.demoSignIn(phone, otp.join(""));
       signIn();
       let patientId = "self";
       const rel = GUEST_RELATIONS.find((r) => r.key === relation);
@@ -684,7 +686,7 @@ export default function BookingWizard() {
           </View>
         ) : null}
         <CtaButton label={t("booking.verifyPay")} loading={busy} disabled={!otp[3]} onPress={verifyAndPay} />
-        <Pressable onPress={() => setOtp(["1", "2", "3", "4"])} style={{ alignItems: "center", padding: 10 }} accessibilityRole="button">
+        <Pressable onPress={() => setOtp(demoOtpCode.split(""))} style={{ alignItems: "center", padding: 10 }} accessibilityRole="button">
           <AppText role="label" color={colors.primaryMuted}>
             {t("auth.resend")}
           </AppText>

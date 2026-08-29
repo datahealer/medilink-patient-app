@@ -61,14 +61,22 @@ export function formatTime(hhmm: string, i18n: Pick<I18n, "isRTL" | "t">): strin
   return `${h}:${mStr} ${ampm}`;
 }
 
+/**
+ * Every date in this product is an Oman (Asia/Muscat, UTC+4, no DST) clinic
+ * date. The device's own timezone must never leak into calendar math — a
+ * phone on IST (or the old toISOString() UTC) would flip the date around
+ * midnight and offer slots for the wrong day.
+ */
+const OMAN_OFFSET_MS = 4 * 3600_000;
+
 export function isoAddDays(base: Date, days: number): string {
-  const d = new Date(base);
-  d.setDate(d.getDate() + days);
+  const d = new Date(base.getTime() + OMAN_OFFSET_MS);
+  d.setUTCDate(d.getUTCDate() + days);
   return d.toISOString().slice(0, 10);
 }
 
 export function todayISO(): string {
-  return new Date().toISOString().slice(0, 10);
+  return new Date(Date.now() + OMAN_OFFSET_MS).toISOString().slice(0, 10);
 }
 
 export function daysUntil(iso: string): number {

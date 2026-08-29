@@ -4,7 +4,7 @@ import { router, useLocalSearchParams } from "expo-router";
 import { LinearGradient } from "expo-linear-gradient";
 import { useTheme } from "@/theme";
 import { useI18n } from "@/i18n";
-import { authBridge, warmUpHomeData } from "@/data";
+import { authBridge, demoOtpCode, warmUpHomeData } from "@/data";
 import { useAppStore } from "@/stores/appStore";
 import { fontFamilyFor } from "@/theme/typography";
 import { AppHeader, AppText, CtaButton, Icon, LoadingNarrator, Orbs, Screen } from "@/components/ui";
@@ -22,10 +22,11 @@ export default function SignIn() {
   const [busy, setBusy] = useState(false);
   const otpTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
 
-  // Demo nicety: the OTP "arrives" and fills itself.
+  // Demo nicety: the OTP "arrives" and fills itself with the real demo code —
+  // verification actually checks it (see data/real/auth.ts).
   useEffect(() => {
     if (stage === "otp") {
-      otpTimer.current = setTimeout(() => setOtp(["1", "2", "3", "4"]), 900);
+      otpTimer.current = setTimeout(() => setOtp(demoOtpCode.split("")), 900);
       return () => {
         if (otpTimer.current) clearTimeout(otpTimer.current);
       };
@@ -38,9 +39,9 @@ export default function SignIn() {
     setBusy(true);
     setError(null);
     try {
-      // Mock: theater. Real: a live Supabase session (demo account behind the
-      // OTP sheet — see src/data/real/auth.ts).
-      await authBridge.demoSignIn(phone);
+      // Mock: theater. Real: a live Supabase session — roster phones sign in,
+      // any other phone gets an account created on the fly (src/data/real/auth.ts).
+      await authBridge.demoSignIn(phone, otp.join(""));
       // Narrated warm-up: tell the patient what's loading while the home
       // screen's data is prefetched, so landing feels instant, not silent.
       setStage("warming");
@@ -173,7 +174,7 @@ export default function SignIn() {
               </AppText>
             ) : null}
             <CtaButton label={t("auth.verify")} loading={busy} disabled={!otp[3]} onPress={() => void complete()} />
-            <Pressable onPress={() => setOtp(["1", "2", "3", "4"])} style={{ alignItems: "center", padding: 10 }} accessibilityRole="button">
+            <Pressable onPress={() => setOtp(demoOtpCode.split(""))} style={{ alignItems: "center", padding: 10 }} accessibilityRole="button">
               <AppText role="label" color={colors.primaryMuted}>
                 {t("auth.resend")}
               </AppText>

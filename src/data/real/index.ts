@@ -580,6 +580,15 @@ const appointmentRepo: AppointmentRepository = {
       forFamilyMemberId: input.patientId !== "self" ? input.patientId : undefined,
       reason: input.reason ?? null,
     });
+    // Stamp who the visit is FOR (the booking RPC records only the account) so
+    // HAMS reception and the doctor's list greet the right person.
+    try {
+      const person = await patientRepo.getPerson(input.patientId);
+      const profile = await q.getMyProfile();
+      if (person) await q.stampAppointmentContact(id, person.full_name, profile.account?.phone ?? null);
+    } catch {
+      // display-only — the booking itself already succeeded
+    }
     const created = await this.get(id);
     if (created) return created;
     // RLS read raced the insert — return a minimal record; the pay screen

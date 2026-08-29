@@ -89,10 +89,32 @@ export interface WorkingDay {
 
 export interface ClinicService {
   id: string;
+  clinic_id?: string;
   name: string;
   name_ar: string;
   price_from_omr: number;
+  old_price_omr?: number;
   specialty?: string;
+  category_code?: string;
+  duration_minutes?: number;
+  gap_minutes?: number;
+  arrival_lead_minutes?: number;
+  advice_requirement?: "required" | "not_required" | "maybe";
+  fasting_requirement?: "none" | "food" | "drink" | "food_and_drink";
+  fasting_hours?: number | null;
+  instructions?: { en: string[]; ar: string[] };
+  doctor_ids?: string[];
+  offer?: CatalogOffer | null;
+}
+
+/** A currently redeemable facility offer attached to one or more services. */
+export interface CatalogOffer {
+  id: string;
+  name: string;
+  name_ar: string;
+  discount_type: "percentage" | "fixed";
+  discount_value: number;
+  ends_at: string;
 }
 
 /**
@@ -151,6 +173,15 @@ export interface HealthPackage {
   popular?: boolean;
   includes: { en: string; ar: string }[];
   tag?: Tag | null; // +proto
+  /** Normalized care_bundles booking identity. Legacy mock packages omit it. */
+  primary_service_id?: string;
+  service_ids?: string[];
+  doctor_ids?: string[];
+  offer_id?: string | null;
+  valid_days?: number;
+  description?: string;
+  description_ar?: string;
+  terms?: { en: string[]; ar: string[] };
 }
 
 export interface AvailableSlot {
@@ -158,6 +189,17 @@ export interface AvailableSlot {
   period: "morning" | "afternoon" | "evening";
   /** "HH:MM" — present in real mode (the reschedule RPC needs the slot end). */
   end?: string;
+  price_omr?: number;
+  duration_minutes?: number;
+  gap_minutes?: number;
+  arrival_lead_minutes?: number;
+  room_id?: string | null;
+  floor_number?: string | null;
+  room_number?: string | null;
+  advice_requirement?: ClinicService["advice_requirement"];
+  fasting_requirement?: ClinicService["fasting_requirement"];
+  fasting_hours?: number | null;
+  instructions?: { en: string[]; ar: string[] };
 }
 
 export interface Appointment {
@@ -176,6 +218,22 @@ export interface Appointment {
   patient_name_ar: string;
   clinic_id: string;
   queue_ahead?: number; // people ahead when checked in
+  service_id?: string | null;
+  package_id?: string | null;
+  offer_id?: string | null;
+  service_name?: string | null;
+  service_name_ar?: string | null;
+  duration_minutes?: number | null;
+  arrival_lead_minutes?: number | null;
+  preparation?: {
+    advice_requirement?: ClinicService["advice_requirement"];
+    fasting_requirement?: ClinicService["fasting_requirement"];
+    fasting_hours?: number | null;
+    instructions_en?: string[];
+    instructions_ar?: string[];
+  } | null;
+  floor_number?: string | null;
+  room_number?: string | null;
 }
 
 export interface NewAppointment {
@@ -185,9 +243,43 @@ export interface NewAppointment {
   slotStart: string;
   patientId: string; // "self" | family id
   reason?: string | null;
+  serviceId?: string | null;
+  packageId?: string | null;
+  offerId?: string | null;
   // Card is the only payment method (client decision 2026-08-10) —
   // production maps create → book_appointment_atomic + card checkout.
   consent: boolean; // PDPL consent — required
+}
+
+export type FeedbackSubject = "facility" | "practitioner" | "platform" | "medilink_staff";
+
+export interface FeedbackOption {
+  value: string;
+  score: number;
+  label_en: string;
+  label_ar: string;
+}
+
+export interface FeedbackQuestion {
+  id: string;
+  subject: FeedbackSubject;
+  question_en: string;
+  question_ar: string;
+  options: FeedbackOption[];
+}
+
+export interface AppointmentFeedbackForm {
+  session_id: string;
+  appointment_id: string;
+  completed: boolean;
+  prompt_store_review: boolean;
+  names: {
+    facility_en?: string | null;
+    facility_ar?: string | null;
+    practitioner_en?: string | null;
+    practitioner_ar?: string | null;
+  };
+  questions: FeedbackQuestion[];
 }
 
 export type FavouriteKind = "doctor" | "clinic" | "package";

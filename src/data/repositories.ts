@@ -8,6 +8,7 @@ import type {
   FamilyMember,
   Favourite,
   FavouriteKind,
+  AppointmentFeedbackForm,
   HealthPackage,
   InsuranceCard,
   MedicalHistory,
@@ -85,6 +86,7 @@ export interface DiscoveryRepository {
    */
   clinicTypes(specialty?: string): Promise<Clinic["type"][]>;
   getClinic(id: string): Promise<Clinic | null>;
+  getService(id: string): Promise<Clinic["services"][number] | null>;
   searchPackages(params?: string | PackageSearchParams): Promise<HealthPackage[]>;
   getPackage(id: string): Promise<HealthPackage | null>;
 }
@@ -100,12 +102,20 @@ export interface AppointmentRepository {
   /** Scoped to a person when patientId is given (profile switching). */
   list(tab: "upcoming" | "past", patientId?: string): Promise<Appointment[]>;
   get(id: string): Promise<Appointment | null>;
-  getSlots(params: { doctorId: string; date: string }): Promise<AvailableSlot[]>;
+  getSlots(params: { doctorId: string; date: string; serviceId?: string | null }): Promise<AvailableSlot[]>;
   create(input: NewAppointment): Promise<Appointment>;
   cancel(id: string): Promise<void>;
   reschedule(id: string, slot: { date: string; start: string }): Promise<void>;
   checkIn(id: string): Promise<void>;
   pay(id: string): Promise<void>;
+}
+
+export interface FeedbackRepository {
+  getForm(appointmentId: string): Promise<AppointmentFeedbackForm>;
+  submit(
+    appointmentId: string,
+    responses: { question_id: string; answer_value: string }[],
+  ): Promise<{ prompt_store_review: boolean; already_submitted?: boolean }>;
 }
 
 export interface NotificationRepository {
@@ -136,6 +146,7 @@ export interface Repositories {
   appointment: AppointmentRepository;
   notification: NotificationRepository;
   review: ReviewRepository;
+  feedback: FeedbackRepository;
   favourite: FavouriteRepository;
   ai: AiRepository;
 }

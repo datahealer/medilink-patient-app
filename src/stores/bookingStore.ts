@@ -10,6 +10,7 @@ interface BookingDraft {
   clinicId: string | null;
   serviceId: string | null;
   packageId: string | null;
+  offerId: string | null;
   patientId: string; // "self" or family member id
   dateISO: string | null; // YYYY-MM-DD
   slotStart: string | null; // HH:MM
@@ -24,6 +25,7 @@ const initial = {
   clinicId: null,
   serviceId: null,
   packageId: null,
+  offerId: null,
   patientId: "self",
   dateISO: null,
   slotStart: null,

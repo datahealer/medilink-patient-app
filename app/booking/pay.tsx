@@ -124,8 +124,12 @@ export default function PayScreen() {
   );
 
   return (
+    // scroll={false} is load-bearing: Screen defaults to a ScrollView, and a
+    // flex:1 WebView inside a ScrollView collapses to 0 height — Thawani's
+    // page then "loads" into an invisible view (white screen, no error).
     <Screen
       padded={false}
+      scroll={false}
       header={
         <AppHeader
           title={t("booking.payment")}
@@ -154,6 +158,21 @@ export default function PayScreen() {
             nestedScrollEnabled
             setSupportMultipleWindows={false}
             keyboardDisplayRequiresUserAction={false}
+            startInLoadingState
+            renderLoading={() => (
+              <View style={{ position: "absolute", inset: 0, alignItems: "center", justifyContent: "center", backgroundColor: colors.background }}>
+                <ActivityIndicator color={colors.primary} />
+                <AppText role="caption" color={colors.textMuted} style={{ marginTop: 10 }}>
+                  {t("booking.paySecured")}
+                </AppText>
+              </View>
+            )}
+            onError={(e) => {
+              // Genuine load failure (DNS, timeout, no route to Thawani) —
+              // surface it with a Retry instead of leaving a white page.
+              setErrorText(e.nativeEvent.description || String(e.nativeEvent.code ?? ""));
+              setPhase("failed");
+            }}
             onShouldStartLoadWithRequest={(req) => shouldLoad(req.url)}
             onNavigationStateChange={(nav: WebViewNavigation) => {
               if (nav.url.includes("/payment-success")) verifyLoop();

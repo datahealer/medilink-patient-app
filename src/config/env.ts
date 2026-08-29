@@ -21,6 +21,23 @@ export const env = {
   DEMO_EMAIL: process.env.EXPO_PUBLIC_DEMO_EMAIL ?? "",
   DEMO_PASSWORD: process.env.EXPO_PUBLIC_DEMO_PASSWORD ?? "",
   /**
+   * The one-time code every OTP sheet sends and accepts (4 digits; no SMS
+   * provider is wired in demo mode). The sheet auto-fills it after a beat, so
+   * the operator always knows the code; typing anything else is refused, which
+   * keeps the theater honest if an investor grabs the phone.
+   */
+  DEMO_OTP: ((process.env.EXPO_PUBLIC_DEMO_OTP ?? "").replace(/\D/g, "") || "1234").slice(0, 4).padEnd(4, "0"),
+  /**
+   * Mailbox that owns the accounts created ON THE FLY when an unknown phone
+   * completes the OTP sheet (guest → booking sign-up). Each phone maps to a
+   * deterministic +tag address (local+ml<digits>@domain), so re-entering the
+   * same number signs into the same account forever. Defaults to DEMO_EMAIL
+   * with any existing +tag stripped.
+   */
+  DEMO_SIGNUP_EMAIL:
+    process.env.EXPO_PUBLIC_DEMO_SIGNUP_EMAIL ??
+    (process.env.EXPO_PUBLIC_DEMO_EMAIL ?? "").replace(/\+[^@]*@/, "@"),
+  /**
    * Multi-account roster: "phone:email,phone:email,…". Every listed phone
    * unlocks its account through the OTP sheet (all share DEMO_PASSWORD), so
    * the demo can switch between seeded patient personas. Falls back to the

@@ -27,15 +27,22 @@ export const repositories: Repositories = isRealData
 
 /**
  * Auth bridge for the sign-in surfaces. In mock mode the OTP is pure theater;
- * in real mode it resolves to a real Supabase session (see real/auth.ts).
+ * in real mode it resolves to a real Supabase session — roster phones sign in,
+ * unknown phones get an account created on the fly (see real/auth.ts).
  */
 export const authBridge = isRealData
   ? realAuth
   : {
-      demoSignIn: async (_phone: string) => {},
+      demoSignIn: async (_phone: string, _code?: string) => {},
       signOut: async () => {},
       init: () => {},
     };
+
+/**
+ * The one-time code the OTP sheets "send" and accept (no SMS in demo mode).
+ * The sheets auto-fill it so the operator always knows the code.
+ */
+export const demoOtpCode: string = env.DEMO_OTP;
 
 /**
  * Pre-warm everything the home screen reads, so the post-sign-in landing is
